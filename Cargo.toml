@@ -1,0 +1,12 @@
+[package]
+name = "synth-experiment"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chargrid_sdl2 = "0.2"
+chargrid = "0.10"
+cpal = "0.15"
+env_logger = "0.10"
+line_2d = "0.5"
+rgb_int = "0.1"
