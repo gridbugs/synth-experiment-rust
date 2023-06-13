@@ -1,4 +1,4 @@
-use crate::synth::Synth;
+use crate::synth::{Const, SquareWaveOscillatorBuilder, Synth};
 use chargrid::{control_flow::*, core::*, prelude::*};
 use std::collections::HashMap;
 
@@ -9,12 +9,21 @@ struct AppData {
 }
 
 impl AppData {
-    fn new() -> Self {
-        Self {
-            mouse_coord: None,
-            synth: Synth::new(),
-            lit_coords: HashMap::new(),
+    fn new() -> anyhow::Result<Self> {
+        let synth = Synth::new()?;
+        let x = SquareWaveOscillatorBuilder {
+            high: 1_f64,
+            low: -1_f64,
+            frequency_hz_signal: Const::new(440_f64),
+            pulse_width_01_signal: Const::new(0.5_f64),
+            sample_rate: synth.sample_rate(),
         }
+        .build();
+        Ok(Self {
+            mouse_coord: None,
+            synth,
+            lit_coords: HashMap::new(),
+        })
     }
 }
 
@@ -83,11 +92,11 @@ impl Component for GuiComponent {
     }
 }
 
-pub fn app() -> App {
-    let app_data = AppData::new();
-    cf(GuiComponent)
+pub fn app() -> anyhow::Result<App> {
+    let app_data = AppData::new()?;
+    Ok(cf(GuiComponent)
         .with_state(app_data)
         .clear_each_frame()
         .ignore_output()
-        .exit_on_close()
+        .exit_on_close())
 }

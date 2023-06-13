@@ -1,7 +1,8 @@
 mod app;
 mod synth;
+mod wrap;
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     use chargrid_sdl2::*;
     env_logger::init();
     let context = Context::new(Config {
@@ -27,5 +28,6 @@ fn main() {
         underline_top_offset_cell_ratio: 0.8,
         resizable: false,
     });
-    context.run(app::app());
+    context.run(app::app()?);
+    Ok(())
 }
