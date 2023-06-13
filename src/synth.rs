@@ -1,13 +1,23 @@
 use crate::wrap::WrapF64Unit;
 use cpal::{
     traits::{DeviceTrait, HostTrait},
-    Device, Host, SupportedStreamConfig,
+    Device, Host, OutputCallbackInfo, Stream, StreamConfig,
+};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{atomic::AtomicU64, mpsc, Arc, RwLock},
 };
 
 pub struct Synth {
     host: Host,
     device: Device,
-    config: SupportedStreamConfig,
+    config: StreamConfig,
+    stream: Stream,
+    sender: mpsc::Sender<f32>,
+    sink_cursor: Arc<RwLock<u64>>,
+    source_cursor: u64,
+    target_padding: u64,
 }
 
 impl Synth {
@@ -25,15 +35,56 @@ impl Synth {
         let config = device.default_output_config()?;
         log::info!("sample format: {}", config.sample_format());
         log::info!("sample rate: {}", config.sample_rate().0);
+        let config = StreamConfig::from(config);
+        let (sender, receiver) = mpsc::channel::<f32>();
+        let sink_cursor = Arc::new(RwLock::new(0));
+        let sink_cursor_for_cpal_thread = Arc::clone(&sink_cursor);
+        let stream = device.build_output_stream(
+            &config,
+            move |data: &mut [f32], _: &OutputCallbackInfo| {
+                let mut count = 0;
+                for output in data.iter_mut() {
+                    if let Ok(input) = receiver.try_recv() {
+                        *output = input;
+                        count += 1;
+                    } else {
+                        break;
+                    }
+                }
+                *sink_cursor_for_cpal_thread.write().unwrap() += count;
+            },
+            |err| log::error!("stream error: {}", err),
+            None,
+        )?;
         Ok(Self {
+            target_padding: (config.sample_rate.0 as u64) / 20,
             host,
             device,
             config,
+            stream,
+            sender,
+            sink_cursor,
+            source_cursor: 0,
         })
     }
 
     pub fn sample_rate(&self) -> u32 {
-        self.config.sample_rate().0
+        self.config.sample_rate.0
+    }
+
+    fn send_single_sample<S: Signal<f32> + ?Sized>(&mut self, signal: &mut S) {
+        if let Err(_) = self.sender.send(signal.sample(self.source_cursor)) {
+            log::error!("failed to send data to cpal thread");
+        }
+        self.source_cursor += 1;
+    }
+
+    pub fn send_signal<S: Signal<f32> + ?Sized>(&mut self, signal: &mut S) {
+        let sink_cursor = *self.sink_cursor.read().unwrap();
+        let target_source_cursor = sink_cursor + self.target_padding;
+        while self.source_cursor < target_source_cursor {
+            self.send_single_sample(signal);
+        }
     }
 }
 
@@ -42,12 +93,30 @@ pub trait Signal<T> {
 }
 
 pub struct Variable<T> {
-    value: T,
+    value: Rc<RefCell<T>>,
+}
+
+impl<T> Variable<T> {
+    pub fn new(value: T) -> Self {
+        Self {
+            value: Rc::new(RefCell::new(value)),
+        }
+    }
+
+    pub fn set(&self, value: T) {
+        *self.value.borrow_mut() = value;
+    }
+
+    pub fn shallow_clone(&self) -> Self {
+        Self {
+            value: Rc::clone(&self.value),
+        }
+    }
 }
 
 impl<T: Copy> Signal<T> for Variable<T> {
     fn sample(&mut self, _: u64) -> T {
-        self.value
+        *self.value.borrow()
     }
 }
 
