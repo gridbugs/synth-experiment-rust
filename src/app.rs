@@ -1,38 +1,59 @@
-use crate::synth::{Const, Signal, SquareWaveOscillatorBuilder, Synth, Variable};
+use crate::{
+    signal::{
+        Const, MovingAverageFilterBuilder, SawWaveOsillatorBuilder, Signal,
+        SquareWaveOscillatorBuilder, Variable,
+    },
+    signal_player::SignalPlayer,
+};
 use chargrid::{control_flow::*, core::*, prelude::*};
 use rgb_int::Rgb24;
 use std::collections::HashMap;
 
 struct AppData {
     mouse_coord: Option<Coord>,
-    synth: Synth,
+    signal_player: SignalPlayer,
     lit_coords: HashMap<Coord, u8>,
     signal: Box<dyn Signal<f32>>,
     frequency_hz: Variable<f64>,
     pulse_width_01: Variable<f64>,
+    moving_average_filter_width: Variable<u32>,
     octave_range: u32,
 }
 
 impl AppData {
     fn new() -> anyhow::Result<Self> {
-        let synth = Synth::new()?;
+        let signal_player = SignalPlayer::new()?;
         let frequency_hz = Variable::new(100_f64);
         let pulse_width_01 = Variable::new(0.5_f64);
-        let x = SquareWaveOscillatorBuilder {
+        let moving_average_filter_width = Variable::new(1);
+        let _osc = SquareWaveOscillatorBuilder {
             high: 0.1_f32,
             low: -0.1_f32,
             frequency_hz_signal: frequency_hz.shallow_clone(),
             pulse_width_01_signal: pulse_width_01.shallow_clone(),
-            sample_rate: synth.sample_rate(),
+            sample_rate: signal_player.sample_rate(),
+        }
+        .build();
+        let osc = SawWaveOsillatorBuilder {
+            high: 0.1_f32,
+            low: -0.1_f32,
+            frequency_hz_signal: frequency_hz.shallow_clone(),
+            sample_rate: signal_player.sample_rate(),
+        }
+        .build();
+        let x = MovingAverageFilterBuilder {
+            signal: osc,
+            width: moving_average_filter_width.shallow_clone(),
         }
         .build();
         Ok(Self {
             mouse_coord: None,
-            synth,
+            signal_player,
             lit_coords: HashMap::new(),
             signal: Box::new(x),
             frequency_hz,
             pulse_width_01,
+            moving_average_filter_width,
             octave_range: 24,
         })
     }
@@ -107,16 +128,20 @@ impl Component for GuiComponent {
                 let freq =
                     offset_to_freq_exp(mouse_coord.x as f64, 55_f64, state.octave_range as f64);
                 state.frequency_hz.set(freq);
+                /*
                 state.pulse_width_01.set(
                     0.5_f64
                         - (mouse_coord.y as f64 / (2 * ctx.bounding_box.size().height()) as f64),
-                );
+                );*/
+                state
+                    .moving_average_filter_width
+                    .set(mouse_coord.y as u32 + 1);
             }
             state.lit_coords.retain(|_, brightness| {
                 *brightness = brightness.saturating_sub(20);
                 *brightness != 0
             });
-            state.synth.send_signal(state.signal.as_mut());
+            state.signal_player.send_signal(state.signal.as_mut());
         }
     }
 

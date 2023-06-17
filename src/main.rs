@@ -1,5 +1,6 @@
 mod app;
-mod synth;
+mod signal;
+mod signal_player;
 mod wrap;
 
 fn main() -> anyhow::Result<()> {
