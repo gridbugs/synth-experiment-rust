@@ -1,0 +1,9 @@
+[package]
+name = "cpal_sample_player"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+cpal = "0.15"
+log = "0.4"

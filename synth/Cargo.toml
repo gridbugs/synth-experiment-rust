@@ -1,0 +1,14 @@
+[package]
+name = "synth-experiment"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+chargrid_sdl2 = "0.2"
+chargrid = "0.10"
+cpal_sample_player = { path = "../cpal-sample-player" }
+env_logger = "0.10"
+log = "0.4"
+line_2d = "0.5"
+rgb_int = "0.1"

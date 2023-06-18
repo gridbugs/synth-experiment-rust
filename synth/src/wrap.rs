@@ -25,6 +25,14 @@ impl RangeF64 for RangeF64Radians {
     const MAX: f64 = std::f64::consts::PI;
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct RangeF64MinusOneToOne;
+
+impl RangeF64 for RangeF64MinusOneToOne {
+    const MIN: f64 = -1f64;
+    const MAX: f64 = 1f64;
+}
+
 #[derive(Debug)]
 pub struct WrapF64<R: RangeF64> {
     value: f64,
@@ -57,10 +65,13 @@ impl<R: RangeF64> WrapF64<R> {
     pub fn value(&self) -> f64 {
         self.value
     }
+
+    pub const DELTA: f64 = R::DELTA;
 }
 
 pub type WrapF64Unit = WrapF64<RangeF64Unit>;
 pub type WrapF64Radians = WrapF64<RangeF64Radians>;
+pub type WrapF64MinusOneToOne = WrapF64<RangeF64MinusOneToOne>;
 
 impl<R: RangeF64> From<f64> for WrapF64<R> {
     fn from(value: f64) -> Self {

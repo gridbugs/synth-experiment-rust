@@ -1,6 +1,7 @@
 use crate::{
     signal::{
-        Const, MovingAverageFilterBuilder, SawWaveOsillatorBuilder, Signal,
+        self, AdsrConfiguration, Amplifier, Const, LinearAdsrEnvelopeGenerator01Builder, Mixer,
+        MovingAverageFilterBuilder, SawWaveOsillatorBuilder, Signal, SineWaveOsillatorBuilder,
         SquareWaveOscillatorBuilder, Variable,
     },
     signal_player::SignalPlayer,
@@ -16,7 +17,7 @@ struct AppData {
     signal: Box<dyn Signal<f32>>,
     frequency_hz: Variable<f64>,
     pulse_width_01: Variable<f64>,
-    moving_average_filter_width: Variable<u32>,
+    mouse_click_gate: Variable<bool>,
     octave_range: u32,
 }
 
@@ -25,36 +26,83 @@ impl AppData {
         let signal_player = SignalPlayer::new()?;
         let frequency_hz = Variable::new(100_f64);
         let pulse_width_01 = Variable::new(0.5_f64);
-        let moving_average_filter_width = Variable::new(1);
         let _osc = SquareWaveOscillatorBuilder {
-            high: 0.1_f32,
-            low: -0.1_f32,
+            high: 1_f32,
+            low: -1_f32,
             frequency_hz_signal: frequency_hz.shallow_clone(),
             pulse_width_01_signal: pulse_width_01.shallow_clone(),
             sample_rate: signal_player.sample_rate(),
         }
         .build();
-        let osc = SawWaveOsillatorBuilder {
-            high: 0.1_f32,
-            low: -0.1_f32,
+        let osc = Mixer {
+            a: Mixer {
+                a: SawWaveOsillatorBuilder {
+                    frequency_hz_signal: signal::map(frequency_hz.shallow_clone(), |x| x * 1f64),
+                    sample_rate: signal_player.sample_rate(),
+                }
+                .build(),
+                b: SawWaveOsillatorBuilder {
+                    frequency_hz_signal: signal::map(frequency_hz.shallow_clone(), |x| x * 1.5f64),
+                    sample_rate: signal_player.sample_rate(),
+                }
+                .build(),
+            },
+            b: SineWaveOsillatorBuilder {
+                frequency_hz_signal: frequency_hz.shallow_clone(),
+                sample_rate: signal_player.sample_rate(),
+            }
+            .build(),
+        };
+        let _osc = SineWaveOsillatorBuilder {
             frequency_hz_signal: frequency_hz.shallow_clone(),
             sample_rate: signal_player.sample_rate(),
         }
         .build();
-        let x = MovingAverageFilterBuilder {
-            signal: osc,
-            width: moving_average_filter_width.shallow_clone(),
+        let mouse_click_gate = Variable::new(false);
+        let configuration = AdsrConfiguration {
+            attack_seconds: 0.2,
+            decay_seconds: 0.4,
+            sustain_level_01: 0.75,
+            release_seconds: 0.5,
+        };
+        let filter_envelope = MovingAverageFilterBuilder {
+            signal: LinearAdsrEnvelopeGenerator01Builder {
+                gate: mouse_click_gate.shallow_clone(),
+                sample_rate: signal_player.sample_rate(),
+                configuration: configuration.clone(),
+            }
+            .build(),
+            width: Const::new(10),
         }
         .build();
+        let filter_max = 120;
+        let moving_average_filter_width = signal::map(filter_envelope, move |e| {
+            1 + filter_max - (filter_max as f64 * e) as u32
+        });
+        let filtered_osc = MovingAverageFilterBuilder {
+            signal: osc,
+            width: moving_average_filter_width,
+        }
+        .build();
+        let amplifier_envelope = LinearAdsrEnvelopeGenerator01Builder {
+            gate: mouse_click_gate.shallow_clone(),
+            sample_rate: signal_player.sample_rate(),
+            configuration,
+        }
+        .build();
+        let x = Amplifier {
+            signal: filtered_osc,
+            volume: amplifier_envelope,
+        };
         Ok(Self {
             mouse_coord: None,
             signal_player,
             lit_coords: HashMap::new(),
-            signal: Box::new(x),
+            signal: Box::new(signal::map(x, |s| s as f32)),
             frequency_hz,
             pulse_width_01,
-            moving_average_filter_width,
             octave_range: 24,
+            mouse_click_gate,
         })
     }
 }
@@ -106,7 +154,7 @@ impl Component for GuiComponent {
         }
     }
 
-    fn update(&mut self, state: &mut Self::State, ctx: Ctx, event: Event) -> Self::Output {
+    fn update(&mut self, state: &mut Self::State, _ctx: Ctx, event: Event) -> Self::Output {
         if let Some(mouse_input) = event.mouse_input() {
             match mouse_input {
                 MouseInput::MouseMove { coord, .. } => {
@@ -120,22 +168,32 @@ impl Component for GuiComponent {
                         state.lit_coords.insert(coord, 255);
                     }
                 }
+                MouseInput::MousePress { .. } => {
+                    state.mouse_click_gate.set(true);
+                }
+                MouseInput::MouseRelease { .. } => {
+                    state.mouse_click_gate.set(false);
+                }
                 _ => (),
             }
         }
         if event.tick().is_some() {
             if let Some(mouse_coord) = state.mouse_coord {
-                let freq =
-                    offset_to_freq_exp(mouse_coord.x as f64, 55_f64, state.octave_range as f64);
+                let freq = offset_to_freq_exp(
+                    (mouse_coord.x + 1) as f64,
+                    27.5_f64,
+                    state.octave_range as f64,
+                );
                 state.frequency_hz.set(freq);
                 /*
                 state.pulse_width_01.set(
                     0.5_f64
                         - (mouse_coord.y as f64 / (2 * ctx.bounding_box.size().height()) as f64),
                 );*/
+                /*
                 state
                     .moving_average_filter_width
-                    .set(mouse_coord.y as u32 + 1);
+                    .set(mouse_coord.y as u32 + 1); */
             }
             state.lit_coords.retain(|_, brightness| {
                 *brightness = brightness.saturating_sub(20);

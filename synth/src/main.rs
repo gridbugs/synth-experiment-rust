@@ -13,7 +13,7 @@ fn main() -> anyhow::Result<()> {
         },
         title: "Synth Experiment".to_string(),
         window_dimensions_px: Dimensions {
-            width: 960.,
+            width: 1280.,
             height: 720.,
         },
         cell_dimensions_px: Dimensions {
