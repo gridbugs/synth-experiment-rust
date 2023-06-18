@@ -1,14 +1,14 @@
 use crate::{
     signal::{
         self, AdsrConfiguration, Amplifier, Const, LinearAdsrEnvelopeGenerator01Builder, Mixer,
-        MovingAverageFilterBuilder, SawWaveOsillatorBuilder, Signal, SineWaveOsillatorBuilder,
-        SquareWaveOscillatorBuilder, Variable,
+        MixerVec, MovingAverageFilterBuilder, SawWaveOsillatorBuilder, Signal,
+        SineWaveOsillatorBuilder, SquareWaveOscillatorBuilder, Variable,
     },
     signal_player::SignalPlayer,
 };
 use chargrid::{control_flow::*, core::*, prelude::*};
 use rgb_int::Rgb24;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 struct AppData {
     mouse_coord: Option<Coord>,
@@ -19,12 +19,113 @@ struct AppData {
     pulse_width_01: Variable<f64>,
     mouse_click_gate: Variable<bool>,
     octave_range: u32,
+    keyboard: BTreeMap<char, Note>,
+}
+
+fn make_key_synth(sample_rate: u32, frequency: f64, gate: Variable<bool>) -> impl Signal<f64> {
+    let osc = Mixer {
+        a: Mixer {
+            a: SawWaveOsillatorBuilder {
+                frequency_hz_signal: Const::new(frequency),
+                sample_rate,
+            }
+            .build(),
+            b: SawWaveOsillatorBuilder {
+                frequency_hz_signal: Const::new(frequency * 2.0),
+                sample_rate,
+            }
+            .build(),
+        },
+        b: SineWaveOsillatorBuilder {
+            frequency_hz_signal: Const::new(frequency * 1.5),
+            sample_rate,
+        }
+        .build(),
+    };
+    let configuration = AdsrConfiguration {
+        attack_seconds: 2.0,
+        decay_seconds: 4.0,
+        sustain_level_01: 0.9,
+        release_seconds: 1.0,
+    };
+    let filter_envelope = MovingAverageFilterBuilder {
+        signal: LinearAdsrEnvelopeGenerator01Builder {
+            gate: gate.shallow_clone(),
+            sample_rate,
+            configuration: configuration.clone(),
+        }
+        .build(),
+        width: Const::new(10),
+    }
+    .build();
+    let filter_envelope = signal::map(filter_envelope, |s| s * 0.8);
+    let filter_max = 120;
+    let moving_average_filter_width = signal::map(filter_envelope, move |e| {
+        1 + filter_max - (filter_max as f64 * e) as u32
+    });
+    let filtered_osc = MovingAverageFilterBuilder {
+        signal: osc,
+        width: moving_average_filter_width,
+    }
+    .build();
+    let amplifier_envelope = LinearAdsrEnvelopeGenerator01Builder {
+        gate,
+        sample_rate,
+        configuration,
+    }
+    .build();
+    let x = Amplifier {
+        signal: filtered_osc,
+        volume: amplifier_envelope,
+    };
+    x
+}
+
+struct Note {
+    frequency: f64,
+    gate_variable: Variable<bool>,
+}
+
+impl Note {
+    fn new(frequency: f64) -> Self {
+        Self {
+            frequency,
+            gate_variable: Variable::new(false),
+        }
+    }
 }
 
 impl AppData {
     fn new() -> anyhow::Result<Self> {
         let signal_player = SignalPlayer::new()?;
+        let keyboard = maplit::btreemap! {
+            'a' => Note::new(261.63), // C
+            'o' => Note::new(293.66), // D
+            'e' => Note::new(329.63), // E
+            'u' => Note::new(349.23), // F
+            'i' => Note::new(392.00), // G
+            'd' => Note::new(440.00), // A
+            'h' => Note::new(493.88), // B
+            't' => Note::new(523.25), // C
+            ',' => Note::new(277.18), // C sharp
+            '.' => Note::new(311.13), // D sharp
+            'y' => Note::new(369.99), // F sharp
+            'f' => Note::new(415.30), // G sharp
+            'g' => Note::new(466.16), // A sharp
+        };
+        let mut key_synths: Vec<Box<dyn Signal<f64>>> = Vec::new();
+        for note in keyboard.values() {
+            let x: Box<dyn Signal<f64>> = Box::new(make_key_synth(
+                signal_player.sample_rate(),
+                note.frequency,
+                note.gate_variable.shallow_clone(),
+            ));
+            key_synths.push(x);
+        }
+        let keyboard_synth = MixerVec(key_synths);
+
         let frequency_hz = Variable::new(100_f64);
+
         let pulse_width_01 = Variable::new(0.5_f64);
         let _osc = SquareWaveOscillatorBuilder {
             high: 1_f32,
@@ -98,11 +199,12 @@ impl AppData {
             mouse_coord: None,
             signal_player,
             lit_coords: HashMap::new(),
-            signal: Box::new(signal::map(x, |s| s as f32)),
+            signal: Box::new(signal::map(keyboard_synth, |s| s as f32)),
             frequency_hz,
             pulse_width_01,
             octave_range: 24,
             mouse_click_gate,
+            keyboard,
         })
     }
 }
@@ -177,6 +279,27 @@ impl Component for GuiComponent {
                 _ => (),
             }
         }
+        if let Some(keyboard_input) = event.keyboard_input() {
+            match keyboard_input {
+                KeyboardInput {
+                    key: Key::Char(ref ch),
+                    event: KeyboardEvent::KeyDown,
+                } => {
+                    if let Some(note) = state.keyboard.get(ch) {
+                        note.gate_variable.set(true);
+                    }
+                }
+                KeyboardInput {
+                    key: Key::Char(ref ch),
+                    event: KeyboardEvent::KeyUp,
+                } => {
+                    if let Some(note) = state.keyboard.get(ch) {
+                        note.gate_variable.set(false);
+                    }
+                }
+                _ => (),
+            }
+        }
         if event.tick().is_some() {
             if let Some(mouse_coord) = state.mouse_coord {
                 let freq = offset_to_freq_exp(
@@ -184,7 +307,7 @@ impl Component for GuiComponent {
                     27.5_f64,
                     state.octave_range as f64,
                 );
-                state.frequency_hz.set(freq);
+                //state.frequency_hz.set(freq);
                 /*
                 state.pulse_width_01.set(
                     0.5_f64

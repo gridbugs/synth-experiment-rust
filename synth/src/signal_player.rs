@@ -8,7 +8,7 @@ pub struct SignalPlayer {
 
 impl SignalPlayer {
     pub fn new() -> anyhow::Result<Self> {
-        let sample_player = SamplePlayer::new()?;
+        let mut sample_player = SamplePlayer::new()?;
         Ok(Self {
             sample_player,
             sample_index: 0,

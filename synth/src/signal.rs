@@ -50,6 +50,19 @@ impl<A: Signal<f64>, B: Signal<f64>> Signal<f64> for Mixer<A, B> {
         self.a.sample(i) + self.b.sample(i)
     }
 }
+
+pub struct MixerVec(pub Vec<Box<dyn Signal<f64>>>);
+
+impl Signal<f64> for MixerVec {
+    fn sample(&mut self, i: u64) -> f64 {
+        let mut sum = 0f64;
+        for s in self.0.iter_mut() {
+            sum += s.sample(i);
+        }
+        sum
+    }
+}
+
 pub struct Variable<T> {
     value: Rc<RefCell<T>>,
 }
