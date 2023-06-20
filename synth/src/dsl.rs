@@ -1,6 +1,6 @@
 #![allow(unused)]
 use crate::synth::{
-    AdsrEnvelopeLinear01, Const, MovingAverageHighPassFilter, MovingAverageLowPassFilter, Mul,
+    AdsrEnvelopeLinear01, Amplify, Const, MovingAverageHighPassFilter, MovingAverageLowPassFilter,
     SawOscillator, SineOscillator, SquareOscillator, Sum,
 };
 pub use crate::{signal::BufferedSignal, synth::Var};
@@ -66,8 +66,8 @@ pub fn sum(values: Vec<BufferedSignal<f64>>) -> BufferedSignal<f64> {
     Sum::new(values).into()
 }
 
-pub fn mul(lhs: BufferedSignal<f64>, rhs: BufferedSignal<f64>) -> BufferedSignal<f64> {
-    Mul::new(lhs, rhs).into()
+pub fn amplify(signal: BufferedSignal<f64>, by: BufferedSignal<f64>) -> BufferedSignal<f64> {
+    Amplify { signal, by }.into()
 }
 
 pub fn adsr_envelope_linear_01(

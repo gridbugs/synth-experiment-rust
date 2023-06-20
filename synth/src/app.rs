@@ -17,14 +17,21 @@ fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSign
             .oscillator(const_((frequency_hz / 2.0) * 1.5), const_(0.5))
             .map(|x| x * 0.25),
     ]);
-    let envelope =
-        adsr_envelope_linear_01(gate, const_(2.0), const_(1.0), const_(0.9), const_(4.0));
+    let filter_envelope = adsr_envelope_linear_01(
+        gate.clone_ref(),
+        const_(2.0),
+        const_(3.0),
+        const_(1.0),
+        const_(1.0),
+    );
     let filter_max = 50;
     let filtered_osc = moving_average_low_pass_filter(
         osc.clone_ref(),
-        envelope.map(move |e| filter_max - (filter_max as f64 * e) as u32),
+        filter_envelope.map(move |e| filter_max - (filter_max as f64 * e) as u32),
     );
-    mul(filtered_osc, envelope)
+    let amplify_envelope =
+        adsr_envelope_linear_01(gate, const_(0.1), const_(0.0), const_(1.0), const_(1.0));
+    amplify(filtered_osc, amplify_envelope)
 }
 
 struct Note {

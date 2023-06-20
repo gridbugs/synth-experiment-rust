@@ -179,21 +179,24 @@ impl From<Sum> for BufferedSignal<f64> {
     }
 }
 
-pub struct Mul(BufferedSignal<f64>, BufferedSignal<f64>);
-impl Mul {
-    pub fn new(a: BufferedSignal<f64>, b: BufferedSignal<f64>) -> Self {
-        Self(a, b)
-    }
+pub struct Amplify {
+    pub signal: BufferedSignal<f64>,
+    pub by: BufferedSignal<f64>,
 }
 
-impl SignalTrait<f64> for Mul {
+impl SignalTrait<f64> for Amplify {
     fn sample(&mut self, ctx: &SignalCtx) -> f64 {
-        self.0.sample(ctx) * self.1.sample(ctx)
+        let by = self.by.sample(ctx);
+        if by == 0f64 {
+            0f64
+        } else {
+            self.signal.sample(ctx) * by
+        }
     }
 }
 
-impl From<Mul> for BufferedSignal<f64> {
-    fn from(value: Mul) -> Self {
+impl From<Amplify> for BufferedSignal<f64> {
+    fn from(value: Amplify) -> Self {
         BufferedSignal::new(value)
     }
 }
