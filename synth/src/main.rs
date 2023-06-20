@@ -1,6 +1,10 @@
 mod app;
+mod app_;
+mod dsl;
 mod signal;
+mod signal_;
 mod signal_player;
+mod synth;
 mod wrap;
 
 fn main() -> anyhow::Result<()> {
@@ -29,6 +33,6 @@ fn main() -> anyhow::Result<()> {
         underline_top_offset_cell_ratio: 0.8,
         resizable: false,
     });
-    context.run(app::app()?);
+    context.run(app_::app()?);
     Ok(())
 }
