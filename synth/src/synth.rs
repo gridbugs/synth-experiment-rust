@@ -1,4 +1,4 @@
-use crate::signal_::*;
+use crate::signal::*;
 use crate::wrap::{WrapF64MinusOneToOne, WrapF64Radians, WrapF64Unit};
 use std::{cell::RefCell, collections::VecDeque, ops::DerefMut, rc::Rc};
 

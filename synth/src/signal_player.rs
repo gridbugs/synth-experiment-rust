@@ -1,5 +1,4 @@
-use crate::signal::Signal;
-use crate::signal_::{BufferedSignal, SignalCtx};
+use crate::signal::{BufferedSignal, SignalCtx};
 use cpal_sample_player::SamplePlayer;
 
 pub struct SignalPlayer {
@@ -9,9 +8,8 @@ pub struct SignalPlayer {
 
 impl SignalPlayer {
     pub fn new() -> anyhow::Result<Self> {
-        let mut sample_player = SamplePlayer::new()?;
         Ok(Self {
-            sample_player,
+            sample_player: SamplePlayer::new()?,
             sample_index: 0,
         })
     }
@@ -20,15 +18,7 @@ impl SignalPlayer {
         self.sample_player.sample_rate()
     }
 
-    pub fn send_signal<S: Signal<f32> + ?Sized>(&mut self, signal: &mut S) {
-        self.sample_player.play_stream(|| {
-            let sample = signal.sample(self.sample_index);
-            self.sample_index += 1;
-            sample
-        });
-    }
-
-    pub fn send_signal_(&mut self, buffered_signal: &mut BufferedSignal<f32>) {
+    pub fn send_signal(&mut self, buffered_signal: &mut BufferedSignal<f32>) {
         let sample_rate = self.sample_rate();
         self.sample_player.play_stream(|| {
             let ctx = SignalCtx {

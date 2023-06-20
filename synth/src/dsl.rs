@@ -1,11 +1,9 @@
-pub use crate::synth::Var;
-use crate::{
-    signal_::BufferedSignal,
-    synth::{
-        AdsrEnvelopeLinear01, Const, MovingAverageHighPassFilter, MovingAverageLowPassFilter, Mul,
-        SawOscillator, SineOscillator, SquareOscillator, Sum,
-    },
+#![allow(unused)]
+use crate::synth::{
+    AdsrEnvelopeLinear01, Const, MovingAverageHighPassFilter, MovingAverageLowPassFilter, Mul,
+    SawOscillator, SineOscillator, SquareOscillator, Sum,
 };
+pub use crate::{signal::BufferedSignal, synth::Var};
 
 pub fn const_<T: Clone + 'static>(value: T) -> BufferedSignal<T> {
     Const::new(value).into()
