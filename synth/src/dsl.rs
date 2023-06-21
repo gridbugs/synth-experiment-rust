@@ -1,7 +1,7 @@
 #![allow(unused)]
 use crate::synth::{
-    AdsrEnvelopeLinear01, Amplify, Const, MovingAverageHighPassFilter, MovingAverageLowPassFilter,
-    SawOscillator, SineOscillator, SquareOscillator, Sum,
+    AdsrEnvelopeExp01, AdsrEnvelopeLinear01, Amplify, Const, MovingAverageHighPassFilter,
+    MovingAverageLowPassFilter, SawOscillator, SineOscillator, SquareOscillator, Sum,
 };
 pub use crate::{signal::BufferedSignal, synth::Var};
 
@@ -78,6 +78,23 @@ pub fn adsr_envelope_linear_01(
     release_seconds: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
     AdsrEnvelopeLinear01 {
+        gate,
+        attack_seconds,
+        decay_seconds,
+        sustain_level_01,
+        release_seconds,
+    }
+    .into()
+}
+
+pub fn adsr_envelope_exp_01(
+    gate: BufferedSignal<bool>,
+    attack_seconds: BufferedSignal<f64>,
+    decay_seconds: BufferedSignal<f64>,
+    sustain_level_01: BufferedSignal<f64>,
+    release_seconds: BufferedSignal<f64>,
+) -> BufferedSignal<f64> {
+    AdsrEnvelopeExp01 {
         gate,
         attack_seconds,
         decay_seconds,

@@ -4,33 +4,27 @@ use rgb_int::Rgb24;
 use std::collections::{BTreeMap, HashMap};
 
 fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSignal<f64> {
-    let waveform = Waveform::Saw;
+    let waveform = Waveform::Square;
     let osc = sum(vec![
-        waveform.oscillator(const_(frequency_hz / 2.0), const_(0.5)),
+        waveform.oscillator(const_(frequency_hz / 8.0), const_(0.2)),
         waveform
-            .oscillator(const_(frequency_hz / 4.0), const_(0.5))
-            .map(|x| x * 0.5),
-        waveform
-            .oscillator(const_(frequency_hz * 1.0), const_(0.5))
-            .map(|x| x * 0.25),
-        waveform
-            .oscillator(const_((frequency_hz / 2.0) * 1.5), const_(0.5))
-            .map(|x| x * 0.25),
+            .oscillator(const_(frequency_hz / 4.0), const_(0.2))
+            .map(|x| x / 1.5),
     ]);
-    let filter_envelope = adsr_envelope_linear_01(
+    let filter_envelope = adsr_envelope_exp_01(
         gate.clone_ref(),
-        const_(2.0),
-        const_(3.0),
-        const_(1.0),
-        const_(1.0),
+        const_(0.5),
+        const_(10.0),
+        const_(0.5),
+        const_(4.0),
     );
     let filter_max = 50;
     let filtered_osc = moving_average_low_pass_filter(
         osc.clone_ref(),
         filter_envelope.map(move |e| filter_max - (filter_max as f64 * e) as u32),
     );
-    let amplify_envelope =
-        adsr_envelope_linear_01(gate, const_(0.1), const_(0.0), const_(1.0), const_(1.0));
+    let amplify_envelope = filter_envelope;
+    //        adsr_envelope_linear_01(gate, const_(0.1), const_(0.0), const_(1.0), const_(1.0));
     amplify(filtered_osc, amplify_envelope)
 }
 
