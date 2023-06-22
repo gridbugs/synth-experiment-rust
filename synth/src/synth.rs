@@ -308,37 +308,47 @@ pub struct AdsrEnvelopeExp01 {
 }
 
 struct AdsrEnvelopeExp01Signal {
-    linear: AdsrEnvelopeLinear01Signal,
-    attack_x_scale: f64,
-    decay_release_x_scale: f64,
-    release_level_01: Option<f64>,
+    props: AdsrEnvelopeExp01,
+    in_attack: bool,
+    prev_gate: bool,
+    current_value: f64,
+    attack_gradient_factor_numerator: f64,
+    decay_release_gradient_factor_numerator: f64,
 }
 
 impl AdsrEnvelopeExp01Signal {
-    const ATTACK_CUTOFF_RATIO: f64 = 2.0 / 3.0;
-    const ATTACK_ASYMPTOTE: f64 = 1.0 / Self::ATTACK_CUTOFF_RATIO;
+    const ATTACK_ASYMPTOTE: f64 = 1.5;
     const DECAY_RELEASE_EPSILON: f64 = 1.0 / 64.0;
-    fn new(
-        AdsrEnvelopeExp01 {
-            gate,
-            attack_seconds,
-            decay_seconds,
-            sustain_level_01,
-            release_seconds,
-        }: AdsrEnvelopeExp01,
-    ) -> Self {
+    fn new(props: AdsrEnvelopeExp01) -> Self {
         Self {
-            linear: AdsrEnvelopeLinear01Signal::new(AdsrEnvelopeLinear01 {
-                gate,
-                attack_seconds,
-                decay_seconds,
-                sustain_level_01,
-                release_seconds,
-            }),
-            attack_x_scale: -(1.0 - Self::ATTACK_CUTOFF_RATIO).log2(),
-            decay_release_x_scale: -Self::DECAY_RELEASE_EPSILON.log2(),
-            release_level_01: None,
+            props,
+            in_attack: false,
+            prev_gate: false,
+            current_value: 0.0,
+            attack_gradient_factor_numerator: -(1.0 - (1.0 / Self::ATTACK_ASYMPTOTE)).ln(),
+            decay_release_gradient_factor_numerator: -Self::DECAY_RELEASE_EPSILON.ln(),
         }
+    }
+
+    fn attack_delta(&mut self, ctx: &SignalCtx) -> f64 {
+        let k = self.attack_gradient_factor_numerator / self.props.attack_seconds.sample(ctx);
+        let gradient = k * (Self::ATTACK_ASYMPTOTE - self.current_value);
+        gradient / ctx.sample_rate as f64
+    }
+
+    fn decay_sustain_delta(&mut self, ctx: &SignalCtx) -> f64 {
+        let k = self.decay_release_gradient_factor_numerator / self.props.decay_seconds.sample(ctx);
+        let sustain_01 = self.props.sustain_level_01.sample(ctx);
+        let current_value_above_sustain = (self.current_value - sustain_01).max(0.0);
+        let gradient = -k * current_value_above_sustain;
+        gradient / ctx.sample_rate as f64
+    }
+
+    fn release_delta(&mut self, ctx: &SignalCtx) -> f64 {
+        let k =
+            self.decay_release_gradient_factor_numerator / self.props.release_seconds.sample(ctx);
+        let gradient = -k * self.current_value;
+        gradient / ctx.sample_rate as f64
     }
 }
 
@@ -350,47 +360,20 @@ impl From<AdsrEnvelopeExp01> for BufferedSignal<f64> {
 
 impl SignalTrait<f64> for AdsrEnvelopeExp01Signal {
     fn sample(&mut self, ctx: &SignalCtx) -> f64 {
-        let linear_sample = self.linear.sample(ctx);
-        if self.linear.props.gate.sample(ctx) {
-            self.release_level_01 = None;
-        }
-        match self.linear.position {
-            AdsrPosition::Attack => {
-                // This function is grows fast initially and slows as time passes. It's asymptotic
-                // at Self::ASYMPTOTE.
-                Self::ATTACK_ASYMPTOTE * (1.0 - 2_f64.powf(-linear_sample * self.attack_x_scale))
+        let gate = self.props.gate.sample(ctx);
+        self.in_attack = self.current_value != 1.0 && gate && (self.in_attack || !self.prev_gate);
+        let delta = if gate {
+            if self.in_attack {
+                self.attack_delta(ctx)
+            } else {
+                self.decay_sustain_delta(ctx)
             }
-            AdsrPosition::Decay => {
-                let sustain_level_01 = self.linear.props.sustain_level_01.sample(ctx);
-                if sustain_level_01 >= 1.0 {
-                    sustain_level_01
-                } else {
-                    let decay_01 = (1.0 - linear_sample) / (1.0 - sustain_level_01);
-                    2_f64.powf(-decay_01 * self.decay_release_x_scale) * (1.0 - sustain_level_01)
-                        + sustain_level_01
-                }
-            }
-            AdsrPosition::Sustain => linear_sample,
-            AdsrPosition::Release => {
-                if linear_sample == 0.0 {
-                    self.release_level_01 = None;
-                    0.0
-                } else {
-                    let release_level_01 = if let Some(release_level_01) = self.release_level_01 {
-                        release_level_01
-                    } else {
-                        self.release_level_01 = Some(linear_sample);
-                        linear_sample
-                    };
-                    if release_level_01 > 0.0 {
-                        let release_01 = (release_level_01 - linear_sample) / release_level_01;
-                        2_f64.powf(-release_01 * self.decay_release_x_scale) * release_level_01
-                    } else {
-                        release_level_01
-                    }
-                }
-            }
-        }
+        } else {
+            self.release_delta(ctx)
+        };
+        self.current_value = (self.current_value + delta).min(1.0);
+        self.prev_gate = gate;
+        self.current_value
     }
 }
 

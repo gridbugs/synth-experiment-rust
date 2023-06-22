@@ -13,9 +13,9 @@ fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSign
     ]);
     let filter_envelope = adsr_envelope_exp_01(
         gate.clone_ref(),
-        const_(0.5),
-        const_(10.0),
-        const_(0.5),
+        const_(3.0),
+        const_(3.0),
+        const_(1.0),
         const_(4.0),
     );
     let filter_max = 50;
