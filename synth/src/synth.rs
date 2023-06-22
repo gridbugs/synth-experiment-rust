@@ -184,13 +184,17 @@ pub struct Amplify {
     pub by: BufferedSignal<f64>,
 }
 
+impl Amplify {
+    const THRESHOLD: f64 = 1.0 / 64.0;
+}
+
 impl SignalTrait<f64> for Amplify {
     fn sample(&mut self, ctx: &SignalCtx) -> f64 {
         let by = self.by.sample(ctx);
-        if by == 0f64 {
-            0f64
-        } else {
+        if by.abs() > Self::THRESHOLD {
             self.signal.sample(ctx) * by
+        } else {
+            0f64
         }
     }
 }
