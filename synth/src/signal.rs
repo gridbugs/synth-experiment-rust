@@ -1,4 +1,8 @@
-use std::{cell::RefCell, ops::DerefMut, rc::Rc};
+use std::{
+    cell::RefCell,
+    ops::{Add, DerefMut, Mul},
+    rc::Rc,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct SignalCtx {
@@ -56,6 +60,10 @@ impl<T: Clone + 'static> BufferedSignal<T> {
             f,
         })
     }
+
+    pub fn both<U: Clone + 'static>(&self, other: &BufferedSignal<U>) -> BufferedSignal<(T, U)> {
+        BufferedSignal::new(Both(self.clone_ref(), other.clone_ref()))
+    }
 }
 
 impl BufferedSignal<bool> {
@@ -63,21 +71,6 @@ impl BufferedSignal<bool> {
         BufferedSignal::new(Trigger {
             signal: self.clone_ref(),
             prev_sample: false,
-        })
-    }
-}
-
-impl BufferedSignal<f64> {
-    pub fn add(&self, other: &Self) -> Self {
-        BufferedSignal::new(Add(self.clone_ref(), other.clone_ref()))
-    }
-    pub fn mul(&self, other: &Self) -> Self {
-        BufferedSignal::new(Mul(self.clone_ref(), other.clone_ref()))
-    }
-    pub fn scale(&self, by: f64) -> Self {
-        BufferedSignal::new(Scale {
-            signal: self.clone_ref(),
-            by,
         })
     }
 }
@@ -145,6 +138,13 @@ impl<T: Clone + 'static, U, F: FnMut(T) -> U> SignalTrait<U> for Map<T, F> {
     }
 }
 
+struct Both<T: Clone, U: Clone>(BufferedSignal<T>, BufferedSignal<U>);
+impl<T: Clone + 'static, U: Clone + 'static> SignalTrait<(T, U)> for Both<T, U> {
+    fn sample(&mut self, ctx: &SignalCtx) -> (T, U) {
+        (self.0.sample(ctx), self.1.sample(ctx))
+    }
+}
+
 struct Trigger {
     signal: BufferedSignal<bool>,
     prev_sample: bool,
@@ -159,26 +159,90 @@ impl SignalTrait<bool> for Trigger {
     }
 }
 
-struct Add(BufferedSignal<f64>, BufferedSignal<f64>);
-impl SignalTrait<f64> for Add {
-    fn sample(&mut self, ctx: &SignalCtx) -> f64 {
-        self.0.sample(ctx) + self.1.sample(ctx)
+impl<T> Add for BufferedSignal<T>
+where
+    T: Add + Clone + 'static,
+    <T as Add>::Output: Clone,
+{
+    type Output = BufferedSignal<<T as Add>::Output>;
+    fn add(self, rhs: Self) -> Self::Output {
+        self.both(&rhs).map(|(lhs, rhs)| lhs + rhs)
     }
 }
 
-struct Mul(BufferedSignal<f64>, BufferedSignal<f64>);
-impl SignalTrait<f64> for Mul {
-    fn sample(&mut self, ctx: &SignalCtx) -> f64 {
-        self.0.sample(ctx) * self.1.sample(ctx)
+impl<T> Add<T> for BufferedSignal<T>
+where
+    T: Add + Copy + 'static,
+    <T as Add>::Output: Clone,
+{
+    type Output = BufferedSignal<<T as Add>::Output>;
+    fn add(self, rhs: T) -> Self::Output {
+        self.map(move |lhs| lhs + rhs)
     }
 }
 
-struct Scale {
-    signal: BufferedSignal<f64>,
-    by: f64,
+impl<T> Mul for BufferedSignal<T>
+where
+    T: Mul + Clone + 'static,
+    <T as Mul>::Output: Clone,
+{
+    type Output = BufferedSignal<<T as Mul>::Output>;
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.both(&rhs).map(|(lhs, rhs)| lhs * rhs)
+    }
 }
-impl SignalTrait<f64> for Scale {
-    fn sample(&mut self, ctx: &SignalCtx) -> f64 {
-        self.signal.sample(ctx) * self.by
+
+impl<T> Mul<T> for BufferedSignal<T>
+where
+    T: Mul + Copy + 'static,
+    <T as Mul>::Output: Clone,
+{
+    type Output = BufferedSignal<<T as Mul>::Output>;
+    fn mul(self, rhs: T) -> Self::Output {
+        self.map(move |lhs| lhs * rhs)
+    }
+}
+
+impl<T> Add for &BufferedSignal<T>
+where
+    T: Add + Clone + 'static,
+    <T as Add>::Output: Clone,
+{
+    type Output = BufferedSignal<<T as Add>::Output>;
+    fn add(self, rhs: Self) -> Self::Output {
+        self.clone_ref() + rhs.clone_ref()
+    }
+}
+
+impl<T> Add<T> for &BufferedSignal<T>
+where
+    T: Add + Copy + 'static,
+    <T as Add>::Output: Clone,
+{
+    type Output = BufferedSignal<<T as Add>::Output>;
+    fn add(self, rhs: T) -> Self::Output {
+        self.clone_ref() + rhs
+    }
+}
+
+impl<T> Mul for &BufferedSignal<T>
+where
+    T: Mul + Clone + 'static,
+    <T as Mul>::Output: Clone,
+{
+    type Output = BufferedSignal<<T as Mul>::Output>;
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.clone_ref() * rhs.clone_ref()
+    }
+}
+
+impl<T> Mul<T> for &BufferedSignal<T>
+where
+    T: Mul + Copy + 'static,
+    <T as Mul>::Output: Clone,
+{
+    type Output = BufferedSignal<<T as Mul>::Output>;
+    fn mul(self, rhs: T) -> Self::Output {
+        self.clone_ref() * rhs
     }
 }

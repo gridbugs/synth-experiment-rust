@@ -2,7 +2,8 @@
 use crate::signal::Const;
 use crate::synth::{
     AdsrEnvelopeExp01, Amplify, MovingAverageHighPassFilter, MovingAverageLowPassFilter,
-    Oscillator, SawOscillator, SineOscillator, SquareOscillator, Sum, TriangleOscillator,
+    Oscillator, SawOscillator, SineOscillator, SquareOscillator, StateVariableFilterFirstOrder,
+    StateVariableFilterFirstOrderOutput, Sum, TriangleOscillator, WeightedSignal, WeightedSum,
 };
 pub use crate::{
     signal::{BufferedSignal, Var},
@@ -31,6 +32,22 @@ pub fn lfo(
         square_wave_pulse_width_01,
     }
     .into()
+}
+
+pub fn lfo_01(
+    waveform: BufferedSignal<Waveform>,
+    frequency_hz: BufferedSignal<f64>,
+    reset_trigger: BufferedSignal<bool>,
+    square_wave_pulse_width_01: BufferedSignal<f64>,
+) -> BufferedSignal<f64> {
+    ((lfo(
+        waveform,
+        frequency_hz,
+        reset_trigger,
+        square_wave_pulse_width_01,
+    ) + 1.0)
+        * 0.5)
+        .map(|x| x)
 }
 
 pub fn oscillator(
@@ -70,6 +87,32 @@ pub fn sum(values: Vec<BufferedSignal<f64>>) -> BufferedSignal<f64> {
     Sum::new(values).into()
 }
 
+pub fn weighted_sum_pair(
+    left_weight: BufferedSignal<f64>,
+    left: BufferedSignal<f64>,
+    right: BufferedSignal<f64>,
+) -> BufferedSignal<f64> {
+    WeightedSum::new(vec![
+        WeightedSignal {
+            weight: left_weight.clone_ref(),
+            signal: left,
+        },
+        WeightedSignal {
+            weight: left_weight.map(|x| 1.0 - x),
+            signal: right,
+        },
+    ])
+    .into()
+}
+
+pub fn weighted_sum_const_pair(
+    left_weight: f64,
+    left: BufferedSignal<f64>,
+    right: BufferedSignal<f64>,
+) -> BufferedSignal<f64> {
+    weighted_sum_pair(const_(left_weight), left, right)
+}
+
 pub fn amplify(signal: BufferedSignal<f64>, by: BufferedSignal<f64>) -> BufferedSignal<f64> {
     Amplify { signal, by }.into()
 }
@@ -103,4 +146,17 @@ pub fn moving_average_high_pass_filter(
     width: BufferedSignal<u32>,
 ) -> BufferedSignal<f64> {
     MovingAverageHighPassFilter { signal, width }.into()
+}
+
+pub fn state_variable_filter_first_order(
+    signal: BufferedSignal<f64>,
+    cutoff_01: BufferedSignal<f64>,
+    resonance_01: BufferedSignal<f64>,
+) -> StateVariableFilterFirstOrderOutput {
+    StateVariableFilterFirstOrder {
+        signal,
+        cutoff_01,
+        resonance_01,
+    }
+    .into()
 }

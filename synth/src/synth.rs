@@ -131,6 +131,7 @@ impl From<TriangleOscillator> for BufferedSignal<f64> {
     }
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone, Copy)]
 pub enum Waveform {
     Sine,
@@ -212,6 +213,44 @@ impl SignalTrait<f64> for Sum {
 
 impl From<Sum> for BufferedSignal<f64> {
     fn from(value: Sum) -> Self {
+        BufferedSignal::new(value)
+    }
+}
+
+pub struct WeightedSignal {
+    pub weight: BufferedSignal<f64>,
+    pub signal: BufferedSignal<f64>,
+}
+pub struct WeightedSum {
+    weighted_signals: Vec<WeightedSignal>,
+}
+impl WeightedSum {
+    pub fn new(weighted_signals: Vec<WeightedSignal>) -> Self {
+        Self { weighted_signals }
+    }
+}
+
+impl SignalTrait<f64> for WeightedSum {
+    fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+        let weights_sum = self
+            .weighted_signals
+            .iter_mut()
+            .map(|ws| ws.weight.sample(ctx))
+            .sum::<f64>();
+        if weights_sum == 0.0 {
+            0.0
+        } else {
+            self.weighted_signals
+                .iter_mut()
+                .map(|ws| ws.weight.sample(ctx) * ws.signal.sample(ctx))
+                .sum::<f64>()
+                / weights_sum
+        }
+    }
+}
+
+impl From<WeightedSum> for BufferedSignal<f64> {
+    fn from(value: WeightedSum) -> Self {
         BufferedSignal::new(value)
     }
 }
@@ -388,5 +427,70 @@ impl SignalTrait<f64> for MovingAverageHighPassFilterSignal {
 impl From<MovingAverageHighPassFilter> for BufferedSignal<f64> {
     fn from(value: MovingAverageHighPassFilter) -> Self {
         BufferedSignal::new(MovingAverageHighPassFilterSignal::new(value))
+    }
+}
+
+pub struct StateVariableFilterFirstOrder {
+    pub signal: BufferedSignal<f64>,
+    pub cutoff_01: BufferedSignal<f64>,
+    pub resonance_01: BufferedSignal<f64>,
+}
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct StateVariableFilterFirstOrderParts<T> {
+    pub low_pass: T,
+    pub band_pass: T,
+    pub high_pass: T,
+}
+
+impl StateVariableFilterFirstOrderParts<f64> {
+    fn next(&self, signal: f64, cutoff_01: f64, resonance_01: f64) -> Self {
+        let low_pass = self.low_pass + (cutoff_01 * self.band_pass);
+        let band_pass = signal - self.low_pass - (resonance_01 * self.band_pass);
+        let high_pass = signal - low_pass - band_pass;
+        Self {
+            low_pass,
+            band_pass,
+            high_pass,
+        }
+    }
+}
+
+struct StateVariableFilterFirstOrderSignal {
+    props: StateVariableFilterFirstOrder,
+    state: StateVariableFilterFirstOrderParts<f64>,
+}
+
+impl StateVariableFilterFirstOrderSignal {
+    fn new(props: StateVariableFilterFirstOrder) -> Self {
+        Self {
+            props,
+            state: Default::default(),
+        }
+    }
+}
+
+impl SignalTrait<StateVariableFilterFirstOrderParts<f64>> for StateVariableFilterFirstOrderSignal {
+    fn sample(&mut self, ctx: &SignalCtx) -> StateVariableFilterFirstOrderParts<f64> {
+        self.state = self.state.next(
+            self.props.signal.sample(ctx),
+            self.props.cutoff_01.sample(ctx),
+            self.props.resonance_01.sample(ctx),
+        );
+        self.state
+    }
+}
+
+pub type StateVariableFilterFirstOrderOutput =
+    StateVariableFilterFirstOrderParts<BufferedSignal<f64>>;
+
+impl From<StateVariableFilterFirstOrder> for StateVariableFilterFirstOrderOutput {
+    fn from(value: StateVariableFilterFirstOrder) -> Self {
+        let parts = BufferedSignal::new(StateVariableFilterFirstOrderSignal::new(value));
+        Self {
+            low_pass: parts.map(|p| p.low_pass),
+            band_pass: parts.map(|p| p.band_pass),
+            high_pass: parts.map(|p| p.high_pass),
+        }
     }
 }

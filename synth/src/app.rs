@@ -4,37 +4,32 @@ use rgb_int::Rgb24;
 use std::collections::{BTreeMap, HashMap};
 
 fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSignal<f64> {
-    let lfo = lfo(
+    let lfo = lfo_01(
         const_(Waveform::Sine),
-        const_(0.3),
+        const_(frequency_hz / 1000.),
         gate.trigger(),
         const_(0.5),
     );
-    let waveform = Waveform::Saw;
-    let osc = sum(vec![
-        oscillator(
-            const_(waveform),
-            const_(frequency_hz / 8.0).mul(&lfo.map(|x| 1.0 + x.max(0.0) * 0.2)),
-            const_(0.2),
-        ),
-        //oscillator(const_(waveform), const_(frequency_hz / 16.0), const_(0.2)).map(|x| x / 1.5),
-    ]);
+    let waveform = Waveform::Square;
+    let osc = sum(vec![oscillator(
+        const_(waveform),
+        const_(frequency_hz / 4.0),
+        const_(0.2),
+    )]);
     let filter_envelope = adsr_envelope_exp_01(
         gate.clone_ref(),
-        const_(0.5),
+        const_(1.0),
         const_(3.0),
         const_(1.0),
         const_(4.0),
     );
-    let filter_max = 50;
-    let filtered_osc = moving_average_low_pass_filter(
+    let filtered_osc = state_variable_filter_first_order(
         osc.clone_ref(),
-        filter_envelope.scale(1.0).map(move |e| {
-            filter_max - (filter_max as f64 * e).clamp(0.0, filter_max as f64) as u32
-        }),
-    );
+        weighted_sum_const_pair(0.6, filter_envelope.clone_ref(), lfo).map(|x| x.max(0.0)),
+        const_(1.0),
+    )
+    .low_pass;
     let amplify_envelope = filter_envelope;
-    //        adsr_envelope_linear_01(gate, const_(0.1), const_(0.0), const_(1.0), const_(1.0));
     amplify(filtered_osc, amplify_envelope)
 }
 
@@ -54,8 +49,8 @@ impl Note {
 
 struct AppData {
     mouse_coord: Option<Coord>,
-    mouse_x_var: Var<u32>,
-    mouse_y_var: Var<u32>,
+    mouse_x_var: Var<f64>,
+    mouse_y_var: Var<f64>,
     signal_player: SignalPlayer,
     lit_coords: HashMap<Coord, u8>,
     signal: BufferedSignal<f32>,
@@ -86,17 +81,15 @@ impl AppData {
             key_synths.push(make_key_synth(note.frequency, note.gate.clone_ref().into()));
         }
         let keyboard_synth = sum(key_synths);
-        let (mouse_x_signal, mouse_x_var) = var(0);
-        let (mouse_y_signal, mouse_y_var) = var(0);
-        let filtered_synth = moving_average_high_pass_filter(
-            moving_average_low_pass_filter(keyboard_synth, mouse_x_signal.map(|x| x)),
-            mouse_y_signal.map(|x| 60 - x),
-        );
+        let (mouse_x_signal, mouse_x_var) = var(0.0);
+        let (_mouse_y_signal, mouse_y_var) = var(0.0);
+        let f = state_variable_filter_first_order(keyboard_synth, mouse_x_signal, const_(1.0));
+        let filtered_synth = f.low_pass;
         Ok(Self {
             mouse_coord: None,
             signal_player,
             lit_coords: HashMap::new(),
-            signal: filtered_synth.map(|s| s as f32 * 0.5),
+            signal: filtered_synth.map(|s| s as f32),
             octave_range: 24,
             keyboard,
             mouse_x_var,
@@ -152,7 +145,7 @@ impl Component for GuiComponent {
         }
     }
 
-    fn update(&mut self, state: &mut Self::State, _ctx: Ctx, event: Event) -> Self::Output {
+    fn update(&mut self, state: &mut Self::State, ctx: Ctx, event: Event) -> Self::Output {
         if let Some(mouse_input) = event.mouse_input() {
             match mouse_input {
                 MouseInput::MouseMove { coord, .. } => {
@@ -199,8 +192,12 @@ impl Component for GuiComponent {
                     27.5_f64,
                     state.octave_range as f64,
                 );
-                state.mouse_x_var.set(mouse_coord.x as u32);
-                state.mouse_y_var.set(mouse_coord.y as u32);
+                state
+                    .mouse_x_var
+                    .set(mouse_coord.x as f64 / ctx.bounding_box.size().width() as f64);
+                state
+                    .mouse_y_var
+                    .set(mouse_coord.y as f64 / ctx.bounding_box.size().height() as f64);
                 //state.frequency_hz.set(freq);
                 /*
                 state.pulse_width_01.set(
