@@ -1,10 +1,11 @@
 use crate::{
     signal::{BufferedSignal, Const, Var},
     synth_modules::{
-        AdsrEnvelopeExp01, Amplify, MovingAverageHighPassFilter, MovingAverageLowPassFilter,
-        Oscillator, StateVariableFilterFirstOrder, StateVariableFilterFirstOrderOutput, Sum,
-        Waveform, WeightedSignal, WeightedSum,
+        adsr_envelope_exp_01, amplify, moving_average_high_pass_filter,
+        moving_average_low_pass_filter, oscillator, state_variable_filter_first_order, sum,
+        weighted_sum,
     },
+    Waveform,
 };
 
 pub fn const_<T: Clone + 'static>(value: T) -> BufferedSignal<T> {
@@ -22,7 +23,7 @@ pub fn lfo(
     reset_trigger: BufferedSignal<bool>,
     square_wave_pulse_width_01: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
-    Oscillator {
+    oscillator::Props {
         frequency_hz,
         waveform,
         reset_trigger,
@@ -52,7 +53,7 @@ pub fn oscillator(
     frequency_hz: BufferedSignal<f64>,
     square_wave_pulse_width_01: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
-    Oscillator {
+    oscillator::Props {
         frequency_hz,
         waveform,
         reset_trigger: const_(false),
@@ -81,7 +82,7 @@ pub fn triangle_oscillator(frequency_hz: BufferedSignal<f64>) -> BufferedSignal<
 }
 
 pub fn sum(values: Vec<BufferedSignal<f64>>) -> BufferedSignal<f64> {
-    Sum::new(values).into()
+    sum::Props::new(values).into()
 }
 
 pub fn weighted_sum_pair(
@@ -89,7 +90,8 @@ pub fn weighted_sum_pair(
     left: BufferedSignal<f64>,
     right: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
-    WeightedSum::new(vec![
+    use weighted_sum::*;
+    Props::new(vec![
         WeightedSignal {
             weight: left_weight.clone_ref(),
             signal: left,
@@ -111,7 +113,7 @@ pub fn weighted_sum_const_pair(
 }
 
 pub fn amplify(signal: BufferedSignal<f64>, by: BufferedSignal<f64>) -> BufferedSignal<f64> {
-    Amplify { signal, by }.into()
+    amplify::Props { signal, by }.into()
 }
 
 pub fn adsr_envelope_exp_01(
@@ -121,7 +123,7 @@ pub fn adsr_envelope_exp_01(
     sustain_level_01: BufferedSignal<f64>,
     release_seconds: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
-    AdsrEnvelopeExp01 {
+    adsr_envelope_exp_01::Props {
         gate,
         attack_seconds,
         decay_seconds,
@@ -135,22 +137,22 @@ pub fn moving_average_low_pass_filter(
     signal: BufferedSignal<f64>,
     width: BufferedSignal<u32>,
 ) -> BufferedSignal<f64> {
-    MovingAverageLowPassFilter { signal, width }.into()
+    moving_average_low_pass_filter::Props { signal, width }.into()
 }
 
 pub fn moving_average_high_pass_filter(
     signal: BufferedSignal<f64>,
     width: BufferedSignal<u32>,
 ) -> BufferedSignal<f64> {
-    MovingAverageHighPassFilter { signal, width }.into()
+    moving_average_high_pass_filter::Props { signal, width }.into()
 }
 
 pub fn state_variable_filter_first_order(
     signal: BufferedSignal<f64>,
     cutoff_01: BufferedSignal<f64>,
     resonance_01: BufferedSignal<f64>,
-) -> StateVariableFilterFirstOrderOutput {
-    StateVariableFilterFirstOrder {
+) -> state_variable_filter_first_order::Output {
+    state_variable_filter_first_order::Props {
         signal,
         cutoff_01,
         resonance_01,
