@@ -7,30 +7,36 @@ use synth_language::*;
 fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSignal<f64> {
     let lfo = lfo_01(
         const_(Waveform::Sine),
-        const_(frequency_hz / 1000.),
+        const_(frequency_hz / 2000.),
         gate.trigger(),
         const_(0.5),
     );
-    let waveform = Waveform::Square;
+    let waveform = Waveform::Saw;
     let osc = sum(vec![oscillator(
         const_(waveform),
-        const_(frequency_hz / 4.0),
+        const_(frequency_hz / 8.0),
         const_(0.2),
     )]);
     let filter_envelope = adsr_envelope_exp_01(
         gate.clone_ref(),
+        const_(3.0),
+        const_(0.0),
+        const_(1.0),
+        const_(1.0),
+    );
+    let amplify_envelope = adsr_envelope_exp_01(
+        gate.clone_ref(),
+        const_(0.0),
+        const_(0.0),
         const_(1.0),
         const_(3.0),
-        const_(1.0),
-        const_(4.0),
     );
     let filtered_osc = state_variable_filter_first_order(
         osc.clone_ref(),
-        weighted_sum_const_pair(0.6, filter_envelope.clone_ref(), lfo).map(|x| x.max(0.0)),
+        weighted_sum_const_pair(0.5, filter_envelope.clone_ref(), lfo).map(|x| x.max(0.0)),
         const_(1.0),
     )
     .low_pass;
-    let amplify_envelope = filter_envelope;
     amplify(filtered_osc, amplify_envelope)
 }
 
