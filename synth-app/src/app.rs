@@ -136,14 +136,6 @@ impl Component for GuiComponent {
 
     fn render(&self, state: &Self::State, ctx: Ctx, fb: &mut FrameBuffer) {
         let size = self.size(state, ctx);
-        for coord in size.coord_iter_row_major() {
-            if coord.x as u32 % state.octave_range == 0 {
-                let cell = RenderCell::default()
-                    .with_character(' ')
-                    .with_background(Rgba32::new_grey(63));
-                fb.set_cell_relative_to_ctx(ctx, coord, 0, cell);
-            }
-        }
         for (coord, brightness) in state.lit_coords.iter() {
             render_coord(*coord, *brightness, size, ctx, fb);
         }
@@ -205,16 +197,6 @@ impl Component for GuiComponent {
                 state
                     .mouse_y_var
                     .set(mouse_coord.y as f64 / ctx.bounding_box.size().height() as f64);
-                //state.frequency_hz.set(freq);
-                /*
-                state.pulse_width_01.set(
-                    0.5_f64
-                        - (mouse_coord.y as f64 / (2 * ctx.bounding_box.size().height()) as f64),
-                );*/
-                /*
-                state
-                    .moving_average_filter_width
-                    .set(mouse_coord.y as u32 + 1); */
             }
             state.lit_coords.retain(|_, brightness| {
                 *brightness = brightness.saturating_sub(20);
