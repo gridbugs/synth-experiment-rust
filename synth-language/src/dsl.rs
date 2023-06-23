@@ -1,13 +1,10 @@
-#![allow(unused)]
-use crate::signal::Const;
-use crate::synth::{
-    AdsrEnvelopeExp01, Amplify, MovingAverageHighPassFilter, MovingAverageLowPassFilter,
-    Oscillator, SawOscillator, SineOscillator, SquareOscillator, StateVariableFilterFirstOrder,
-    StateVariableFilterFirstOrderOutput, Sum, TriangleOscillator, WeightedSignal, WeightedSum,
-};
-pub use crate::{
-    signal::{BufferedSignal, Var},
-    synth::Waveform,
+use crate::{
+    signal::{BufferedSignal, Const, Var},
+    synth_modules::{
+        AdsrEnvelopeExp01, Amplify, MovingAverageHighPassFilter, MovingAverageLowPassFilter,
+        Oscillator, StateVariableFilterFirstOrder, StateVariableFilterFirstOrderOutput, Sum,
+        Waveform, WeightedSignal, WeightedSum,
+    },
 };
 
 pub fn const_<T: Clone + 'static>(value: T) -> BufferedSignal<T> {

@@ -1,135 +1,5 @@
 use crate::signal::*;
-use crate::wrap::{WrapF64MinusOneToOne, WrapF64Radians, WrapF64Unit};
 use std::collections::VecDeque;
-
-pub struct SineOscillator {
-    pub frequency_hz: BufferedSignal<f64>,
-}
-
-struct SineOscillatorSignal {
-    props: SineOscillator,
-    state: WrapF64Radians,
-}
-
-impl SineOscillatorSignal {
-    fn new(props: SineOscillator) -> Self {
-        Self {
-            props,
-            state: 0f64.into(),
-        }
-    }
-}
-
-impl SignalTrait<f64> for SineOscillatorSignal {
-    fn sample(&mut self, ctx: &SignalCtx) -> f64 {
-        self.state +=
-            (self.props.frequency_hz.sample(ctx) * WrapF64Radians::DELTA) / ctx.sample_rate as f64;
-        (self.state.value() as f64).sin()
-    }
-}
-
-impl From<SineOscillator> for BufferedSignal<f64> {
-    fn from(value: SineOscillator) -> Self {
-        BufferedSignal::new(SineOscillatorSignal::new(value))
-    }
-}
-
-pub struct SquareOscillator {
-    pub frequency_hz: BufferedSignal<f64>,
-    pub pulse_width_01: BufferedSignal<f64>,
-}
-
-struct SquareOscillatorSignal {
-    props: SquareOscillator,
-    state: WrapF64Unit,
-}
-
-impl SquareOscillatorSignal {
-    fn new(props: SquareOscillator) -> Self {
-        Self {
-            props,
-            state: 0f64.into(),
-        }
-    }
-}
-
-impl SignalTrait<f64> for SquareOscillatorSignal {
-    fn sample(&mut self, ctx: &SignalCtx) -> f64 {
-        self.state += self.props.frequency_hz.sample(ctx) / ctx.sample_rate as f64;
-        if self.state.value() < self.props.pulse_width_01.sample(ctx) {
-            -1f64
-        } else {
-            1f64
-        }
-    }
-}
-
-impl From<SquareOscillator> for BufferedSignal<f64> {
-    fn from(value: SquareOscillator) -> Self {
-        BufferedSignal::new(SquareOscillatorSignal::new(value))
-    }
-}
-
-pub struct SawOscillator {
-    pub frequency_hz: BufferedSignal<f64>,
-}
-
-struct SawOscillatorSignal {
-    props: SawOscillator,
-    state: WrapF64MinusOneToOne,
-}
-
-impl SawOscillatorSignal {
-    fn new(props: SawOscillator) -> Self {
-        Self {
-            props,
-            state: 0f64.into(),
-        }
-    }
-}
-
-impl SignalTrait<f64> for SawOscillatorSignal {
-    fn sample(&mut self, ctx: &SignalCtx) -> f64 {
-        self.state += (self.props.frequency_hz.sample(ctx) * WrapF64MinusOneToOne::DELTA)
-            / ctx.sample_rate as f64;
-        self.state.value() as f64
-    }
-}
-
-impl From<SawOscillator> for BufferedSignal<f64> {
-    fn from(value: SawOscillator) -> Self {
-        BufferedSignal::new(SawOscillatorSignal::new(value))
-    }
-}
-
-pub struct TriangleOscillator {
-    pub frequency_hz: BufferedSignal<f64>,
-}
-
-struct TriangelOscillatorSignal {
-    saw_oscillator_signal: SawOscillatorSignal,
-}
-
-impl TriangelOscillatorSignal {
-    fn new(TriangleOscillator { frequency_hz }: TriangleOscillator) -> Self {
-        Self {
-            saw_oscillator_signal: SawOscillatorSignal::new(SawOscillator { frequency_hz }),
-        }
-    }
-}
-
-impl SignalTrait<f64> for TriangelOscillatorSignal {
-    fn sample(&mut self, ctx: &SignalCtx) -> f64 {
-        let saw_sample = self.saw_oscillator_signal.sample(ctx);
-        (saw_sample.abs() * 2.0) - 1.0
-    }
-}
-
-impl From<TriangleOscillator> for BufferedSignal<f64> {
-    fn from(value: TriangleOscillator) -> Self {
-        BufferedSignal::new(TriangelOscillatorSignal::new(value))
-    }
-}
 
 #[allow(unused)]
 #[derive(Debug, Clone, Copy)]
@@ -149,15 +19,12 @@ pub struct Oscillator {
 
 struct OscillatorSignal {
     props: Oscillator,
-    state: WrapF64Unit,
+    state: f64,
 }
 
 impl OscillatorSignal {
     fn new(props: Oscillator) -> Self {
-        Self {
-            props,
-            state: 0f64.into(),
-        }
+        Self { props, state: 0.0 }
     }
 }
 
@@ -166,7 +33,9 @@ impl SignalTrait<f64> for OscillatorSignal {
         if self.props.reset_trigger.sample(ctx) {
             self.state = 0f64.into();
         } else {
-            self.state += self.props.frequency_hz.sample(ctx) / ctx.sample_rate as f64;
+            self.state = (self.state
+                + (self.props.frequency_hz.sample(ctx) / ctx.sample_rate as f64))
+                .rem_euclid(1.0);
         }
         let state: f64 = self.state.into();
         let x = match self.props.waveform.sample(ctx) {
@@ -181,7 +50,6 @@ impl SignalTrait<f64> for OscillatorSignal {
             Waveform::Triangle => (((state * 2.0) - 1.0).abs() * 2.0) - 1.0,
             Waveform::Sine => (state * std::f64::consts::PI * 2.0).sin(),
         };
-        //println!("{}", x);
         x
     }
 }

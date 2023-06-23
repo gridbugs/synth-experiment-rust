@@ -846,7 +846,12 @@ dependencies = [
  "log",
  "maplit",
  "rgb_int",
+ "synth_language",
 ]
+
+[[package]]
+name = "synth_language"
+version = "0.1.0"
 
 [[package]]
 name = "termcolor"

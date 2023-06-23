@@ -13,3 +13,4 @@ log = "0.4"
 line_2d = "0.5"
 maplit = "1.0"
 rgb_int = "0.1"
+synth_language = { path = "../synth-language" }

@@ -1,5 +1,5 @@
-use crate::signal::{BufferedSignal, SignalCtx};
 use cpal_sample_player::SamplePlayer;
+use synth_language::{BufferedSignal, SignalCtx};
 
 pub struct SignalPlayer {
     sample_player: SamplePlayer<f32>,

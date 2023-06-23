@@ -2,5 +2,6 @@
 
 members = [
     "cpal-sample-player",
-    "synth",
+    "synth-language",
+    "synth-app",
 ]

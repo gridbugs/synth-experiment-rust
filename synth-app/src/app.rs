@@ -1,7 +1,8 @@
-use crate::{dsl::*, signal::BufferedSignal, signal_player::SignalPlayer};
+use crate::signal_player::SignalPlayer;
 use chargrid::{control_flow::*, core::*, prelude::*};
 use rgb_int::Rgb24;
 use std::collections::{BTreeMap, HashMap};
+use synth_language::*;
 
 fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSignal<f64> {
     let lfo = lfo_01(

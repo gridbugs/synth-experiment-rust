@@ -1,9 +1,5 @@
 mod app;
-mod dsl;
-mod signal;
 mod signal_player;
-mod synth;
-mod wrap;
 
 fn main() -> anyhow::Result<()> {
     use chargrid_sdl2::*;
