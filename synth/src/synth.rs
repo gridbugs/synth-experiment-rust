@@ -154,6 +154,35 @@ impl From<SawOscillator> for BufferedSignal<f64> {
     }
 }
 
+pub struct TriangleOscillator {
+    pub frequency_hz: BufferedSignal<f64>,
+}
+
+struct TriangelOscillatorSignal {
+    saw_oscillator_signal: SawOscillatorSignal,
+}
+
+impl TriangelOscillatorSignal {
+    fn new(TriangleOscillator { frequency_hz }: TriangleOscillator) -> Self {
+        Self {
+            saw_oscillator_signal: SawOscillatorSignal::new(SawOscillator { frequency_hz }),
+        }
+    }
+}
+
+impl SignalTrait<f64> for TriangelOscillatorSignal {
+    fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+        let saw_sample = self.saw_oscillator_signal.sample(ctx);
+        (saw_sample.abs() * 2.0) - 1.0
+    }
+}
+
+impl From<TriangleOscillator> for BufferedSignal<f64> {
+    fn from(value: TriangleOscillator) -> Self {
+        BufferedSignal::new(TriangelOscillatorSignal::new(value))
+    }
+}
+
 pub struct Sum {
     signals: Vec<BufferedSignal<f64>>,
 }

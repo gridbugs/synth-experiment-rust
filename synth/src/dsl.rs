@@ -1,7 +1,7 @@
 #![allow(unused)]
 use crate::synth::{
     AdsrEnvelopeExp01, Amplify, Const, MovingAverageHighPassFilter, MovingAverageLowPassFilter,
-    SawOscillator, SineOscillator, SquareOscillator, Sum,
+    SawOscillator, SineOscillator, SquareOscillator, Sum, TriangleOscillator,
 };
 pub use crate::{signal::BufferedSignal, synth::Var};
 
@@ -33,11 +33,16 @@ pub fn saw_oscillator(frequency_hz: BufferedSignal<f64>) -> BufferedSignal<f64> 
     SawOscillator { frequency_hz }.into()
 }
 
+pub fn triangle_oscillator(frequency_hz: BufferedSignal<f64>) -> BufferedSignal<f64> {
+    SawOscillator { frequency_hz }.into()
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum Waveform {
     Sine,
     Square,
     Saw,
+    Triangle,
 }
 
 fn oscillator(
@@ -49,6 +54,7 @@ fn oscillator(
         Waveform::Saw => saw_oscillator(frequency_hz),
         Waveform::Sine => sine_oscillator(frequency_hz),
         Waveform::Square => square_oscillator(frequency_hz, pulse_width_01),
+        Waveform::Triangle => triangle_oscillator(frequency_hz),
     }
 }
 

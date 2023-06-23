@@ -4,16 +4,16 @@ use rgb_int::Rgb24;
 use std::collections::{BTreeMap, HashMap};
 
 fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSignal<f64> {
-    let waveform = Waveform::Square;
+    let waveform = Waveform::Triangle;
     let osc = sum(vec![
         waveform.oscillator(const_(frequency_hz / 8.0), const_(0.2)),
         waveform
-            .oscillator(const_(frequency_hz / 4.0), const_(0.2))
+            .oscillator(const_(frequency_hz / 16.0), const_(0.2))
             .map(|x| x / 1.5),
     ]);
     let filter_envelope = adsr_envelope_exp_01(
         gate.clone_ref(),
-        const_(3.0),
+        const_(0.5),
         const_(3.0),
         const_(1.0),
         const_(4.0),
