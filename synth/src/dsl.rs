@@ -1,9 +1,13 @@
 #![allow(unused)]
+use crate::signal::Const;
 use crate::synth::{
-    AdsrEnvelopeExp01, Amplify, Const, MovingAverageHighPassFilter, MovingAverageLowPassFilter,
-    SawOscillator, SineOscillator, SquareOscillator, Sum, TriangleOscillator,
+    AdsrEnvelopeExp01, Amplify, MovingAverageHighPassFilter, MovingAverageLowPassFilter,
+    Oscillator, SawOscillator, SineOscillator, SquareOscillator, Sum, TriangleOscillator,
 };
-pub use crate::{signal::BufferedSignal, synth::Var};
+pub use crate::{
+    signal::{BufferedSignal, Var},
+    synth::Waveform,
+};
 
 pub fn const_<T: Clone + 'static>(value: T) -> BufferedSignal<T> {
     Const::new(value).into()
@@ -14,58 +18,52 @@ pub fn var<T: Clone + 'static>(value: T) -> (BufferedSignal<T>, Var<T>) {
     (var.clone_ref().into(), var)
 }
 
+pub fn lfo(
+    waveform: BufferedSignal<Waveform>,
+    frequency_hz: BufferedSignal<f64>,
+    reset_trigger: BufferedSignal<bool>,
+    square_wave_pulse_width_01: BufferedSignal<f64>,
+) -> BufferedSignal<f64> {
+    Oscillator {
+        frequency_hz,
+        waveform,
+        reset_trigger,
+        square_wave_pulse_width_01,
+    }
+    .into()
+}
+
+pub fn oscillator(
+    waveform: BufferedSignal<Waveform>,
+    frequency_hz: BufferedSignal<f64>,
+    square_wave_pulse_width_01: BufferedSignal<f64>,
+) -> BufferedSignal<f64> {
+    Oscillator {
+        frequency_hz,
+        waveform,
+        reset_trigger: const_(false),
+        square_wave_pulse_width_01,
+    }
+    .into()
+}
+
 pub fn sine_oscillator(frequency_hz: BufferedSignal<f64>) -> BufferedSignal<f64> {
-    SineOscillator { frequency_hz }.into()
+    oscillator(const_(Waveform::Sine), frequency_hz, const_(0.0))
 }
 
 pub fn square_oscillator(
     frequency_hz: BufferedSignal<f64>,
     pulse_width_01: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
-    SquareOscillator {
-        frequency_hz,
-        pulse_width_01,
-    }
-    .into()
+    oscillator(const_(Waveform::Sine), frequency_hz, pulse_width_01)
 }
 
 pub fn saw_oscillator(frequency_hz: BufferedSignal<f64>) -> BufferedSignal<f64> {
-    SawOscillator { frequency_hz }.into()
+    oscillator(const_(Waveform::Saw), frequency_hz, const_(0.0))
 }
 
 pub fn triangle_oscillator(frequency_hz: BufferedSignal<f64>) -> BufferedSignal<f64> {
-    SawOscillator { frequency_hz }.into()
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Waveform {
-    Sine,
-    Square,
-    Saw,
-    Triangle,
-}
-
-fn oscillator(
-    waveform: Waveform,
-    frequency_hz: BufferedSignal<f64>,
-    pulse_width_01: BufferedSignal<f64>,
-) -> BufferedSignal<f64> {
-    match waveform {
-        Waveform::Saw => saw_oscillator(frequency_hz),
-        Waveform::Sine => sine_oscillator(frequency_hz),
-        Waveform::Square => square_oscillator(frequency_hz, pulse_width_01),
-        Waveform::Triangle => triangle_oscillator(frequency_hz),
-    }
-}
-
-impl Waveform {
-    pub fn oscillator(
-        self,
-        frequency_hz: BufferedSignal<f64>,
-        pulse_width_01: BufferedSignal<f64>,
-    ) -> BufferedSignal<f64> {
-        oscillator(self, frequency_hz, pulse_width_01)
-    }
+    oscillator(const_(Waveform::Triangle), frequency_hz, const_(0.0))
 }
 
 pub fn sum(values: Vec<BufferedSignal<f64>>) -> BufferedSignal<f64> {

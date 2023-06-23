@@ -1,58 +1,6 @@
 use crate::signal::*;
 use crate::wrap::{WrapF64MinusOneToOne, WrapF64Radians, WrapF64Unit};
-use std::{cell::RefCell, collections::VecDeque, ops::DerefMut, rc::Rc};
-
-pub struct Const<T>(T);
-
-impl<T> Const<T> {
-    pub fn new(value: T) -> Self {
-        Self(value)
-    }
-}
-
-impl<T: Clone> SignalTrait<T> for Const<T> {
-    fn sample(&mut self, _ctx: &SignalCtx) -> T {
-        self.0.clone()
-    }
-}
-
-impl<T: Clone + 'static> From<Const<T>> for BufferedSignal<T> {
-    fn from(value: Const<T>) -> Self {
-        BufferedSignal::new(value)
-    }
-}
-
-pub struct Var<T>(Rc<RefCell<T>>);
-
-impl<T: Clone> Var<T> {
-    pub fn new(value: T) -> Self {
-        Self(Rc::new(RefCell::new(value)))
-    }
-
-    pub fn clone_ref(&self) -> Self {
-        Var(Rc::clone(&self.0))
-    }
-
-    pub fn get(&self) -> T {
-        self.0.borrow().clone()
-    }
-
-    pub fn set(&self, value: T) {
-        *self.0.borrow_mut().deref_mut() = value;
-    }
-}
-
-impl<T: Clone> SignalTrait<T> for Var<T> {
-    fn sample(&mut self, _ctx: &SignalCtx) -> T {
-        self.get()
-    }
-}
-
-impl<T: Clone + 'static> From<Var<T>> for BufferedSignal<T> {
-    fn from(value: Var<T>) -> Self {
-        BufferedSignal::new(value)
-    }
-}
+use std::collections::VecDeque;
 
 pub struct SineOscillator {
     pub frequency_hz: BufferedSignal<f64>,
@@ -180,6 +128,66 @@ impl SignalTrait<f64> for TriangelOscillatorSignal {
 impl From<TriangleOscillator> for BufferedSignal<f64> {
     fn from(value: TriangleOscillator) -> Self {
         BufferedSignal::new(TriangelOscillatorSignal::new(value))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Waveform {
+    Sine,
+    Square,
+    Saw,
+    Triangle,
+}
+
+pub struct Oscillator {
+    pub waveform: BufferedSignal<Waveform>,
+    pub frequency_hz: BufferedSignal<f64>,
+    pub reset_trigger: BufferedSignal<bool>,
+    pub square_wave_pulse_width_01: BufferedSignal<f64>,
+}
+
+struct OscillatorSignal {
+    props: Oscillator,
+    state: WrapF64Unit,
+}
+
+impl OscillatorSignal {
+    fn new(props: Oscillator) -> Self {
+        Self {
+            props,
+            state: 0f64.into(),
+        }
+    }
+}
+
+impl SignalTrait<f64> for OscillatorSignal {
+    fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+        if self.props.reset_trigger.sample(ctx) {
+            self.state = 0f64.into();
+        } else {
+            self.state += self.props.frequency_hz.sample(ctx) / ctx.sample_rate as f64;
+        }
+        let state: f64 = self.state.into();
+        let x = match self.props.waveform.sample(ctx) {
+            Waveform::Saw => (state * 2.0) - 1.0,
+            Waveform::Square => {
+                if state < self.props.square_wave_pulse_width_01.sample(ctx) {
+                    -1.0
+                } else {
+                    1.0
+                }
+            }
+            Waveform::Triangle => (((state * 2.0) - 1.0).abs() * 2.0) - 1.0,
+            Waveform::Sine => (state * std::f64::consts::PI * 2.0).sin(),
+        };
+        //println!("{}", x);
+        x
+    }
+}
+
+impl From<Oscillator> for BufferedSignal<f64> {
+    fn from(value: Oscillator) -> Self {
+        BufferedSignal::new(OscillatorSignal::new(value))
     }
 }
 
