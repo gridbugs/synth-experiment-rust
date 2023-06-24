@@ -6,16 +6,17 @@ use synth_language::*;
 
 fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSignal<f64> {
     let lfo = lfo_01(
-        const_(Waveform::Sine),
-        const_(frequency_hz / 2000.),
+        const_(Waveform::Saw),
+        //const_(-frequency_hz / 160.),
+        const_(-5.0),
         gate.trigger(),
         const_(0.5),
     );
     let waveform = Waveform::Saw;
     let osc = sum(vec![oscillator(
         const_(waveform),
-        const_(frequency_hz / 8.0),
-        const_(0.2),
+        const_(frequency_hz / 4.0), // * (lfo.clone_ref() * 10.0),
+        const_(0.5),
     )]);
     let filter_envelope = adsr_envelope_exp_01(
         gate.clone_ref(),
@@ -26,14 +27,14 @@ fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSign
     );
     let amplify_envelope = adsr_envelope_exp_01(
         gate.clone_ref(),
-        const_(0.0),
+        const_(0.1),
         const_(0.0),
         const_(1.0),
         const_(3.0),
     );
     let filtered_osc = state_variable_filter_first_order(
         osc.clone_ref(),
-        weighted_sum_const_pair(0.5, filter_envelope.clone_ref(), lfo).map(|x| x.max(0.0)),
+        weighted_sum_const_pair(0.5, filter_envelope.clone_ref(), lfo).map(|x| x.max(0.0)) * 0.05,
         const_(1.0),
     )
     .low_pass;
@@ -63,6 +64,8 @@ struct AppData {
     signal: BufferedSignal<f32>,
     octave_range: u32,
     keyboard: BTreeMap<char, Note>,
+    frame_count: u64,
+    recent_samples: Vec<f32>,
 }
 
 impl AppData {
@@ -89,8 +92,8 @@ impl AppData {
         }
         let keyboard_synth = sum(key_synths);
         let (mouse_x_signal, mouse_x_var) = var(0.0);
-        let (_mouse_y_signal, mouse_y_var) = var(0.0);
-        let f = state_variable_filter_first_order(keyboard_synth, mouse_x_signal, const_(1.0));
+        let (mouse_y_signal, mouse_y_var) = var(0.0);
+        let f = state_variable_filter_first_order(keyboard_synth, mouse_x_signal, mouse_y_signal);
         let filtered_synth = f.low_pass;
         Ok(Self {
             mouse_coord: None,
@@ -101,6 +104,8 @@ impl AppData {
             keyboard,
             mouse_x_var,
             mouse_y_var,
+            frame_count: 0,
+            recent_samples: Vec::new(),
         })
     }
 }
@@ -136,6 +141,27 @@ impl Component for GuiComponent {
 
     fn render(&self, state: &Self::State, ctx: Ctx, fb: &mut FrameBuffer) {
         let size = self.size(state, ctx);
+        if state.recent_samples.len() > 0 {
+            let width = size.width() as usize;
+            let height = size.height();
+            let step = state.recent_samples.len() / width;
+            let scale = 1.0 / 4.0;
+            let mut prev = Coord::new(0, 0);
+            for x in 0..width {
+                let sample = state.recent_samples[x * step];
+                let top = ((height as f32 / 2.0) + (scale * sample * (height as f32 / 2.0))) as u32;
+                let coord = Coord::new(x as i32, top as i32);
+                if x > 0 {
+                    for coord in line_2d::coords_between(prev, coord) {
+                        let cell = RenderCell::default()
+                            .with_character(' ')
+                            .with_background(Rgba32::new(255, 128, 128, 255));
+                        fb.set_cell_relative_to_ctx(ctx, coord, 0, cell);
+                    }
+                }
+                prev = coord;
+            }
+        }
         for (coord, brightness) in state.lit_coords.iter() {
             render_coord(*coord, *brightness, size, ctx, fb);
         }
@@ -203,6 +229,12 @@ impl Component for GuiComponent {
                 *brightness != 0
             });
             state.signal_player.send_signal(&mut state.signal);
+            if state.frame_count % 1 == 0 {
+                state
+                    .signal_player
+                    .swap_recent_samples(&mut state.recent_samples);
+            }
+            state.frame_count += 1;
         }
     }
 
