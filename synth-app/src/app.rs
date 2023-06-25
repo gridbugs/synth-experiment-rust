@@ -23,13 +23,11 @@ fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSign
     let filtered_osc = osc.clone_ref();
     let filtered_osc = chebyshev_low_pass_filter(
         filtered_osc,
-        state_variable_filter_first_order(
+        butterworth_low_pass_filter(
             weighted_sum_const_pair(1.0, filter_envelope.div_nyquist(), lfo * (1.0))
                 .map(|x| x.clamp(0.0, 1.0)),
             const_(0.001),
-            const_(1.0),
-        )
-        .low_pass,
+        ),
         const_(5.0),
     );
     let filtered_osc = chebyshev_high_pass_filter(filtered_osc, const_(0.0), const_(0.1));
@@ -90,12 +88,10 @@ impl AppData {
         let (mouse_y_signal, mouse_y_var) = var(0.0_f64);
         let filtered_synth = chebyshev_low_pass_filter(
             keyboard_synth,
-            state_variable_filter_first_order(
+            butterworth_low_pass_filter(
                 mouse_x_signal.map(|x| (5.0 * (x - 1.0)).exp()),
                 const_(0.0005),
-                const_(1.0),
-            )
-            .low_pass,
+            ),
             mouse_y_signal * 10.0,
         );
         Ok(Self {

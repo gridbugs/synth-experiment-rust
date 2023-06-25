@@ -1,9 +1,8 @@
 use crate::{
     signal::{BufferedSignal, Const, Var},
     synth_modules::{
-        adsr_envelope_exp_01, amplify, asr_envelope_lin_01, biquad_filter,
-        moving_average_high_pass_filter, moving_average_low_pass_filter, oscillator,
-        state_variable_filter_first_order, sum, weighted_sum,
+        adsr_envelope_exp_01, amplify, asr_envelope_lin_01, biquad_filter, oscillator, sum,
+        weighted_sum,
     },
     Waveform,
 };
@@ -142,33 +141,6 @@ pub fn adsr_envelope_exp_01(
         decay_seconds,
         sustain_level_01,
         release_seconds,
-    }
-    .into()
-}
-
-pub fn moving_average_low_pass_filter(
-    signal: BufferedSignal<f64>,
-    width: BufferedSignal<u32>,
-) -> BufferedSignal<f64> {
-    moving_average_low_pass_filter::Props { signal, width }.into()
-}
-
-pub fn moving_average_high_pass_filter(
-    signal: BufferedSignal<f64>,
-    width: BufferedSignal<u32>,
-) -> BufferedSignal<f64> {
-    moving_average_high_pass_filter::Props { signal, width }.into()
-}
-
-pub fn state_variable_filter_first_order(
-    signal: BufferedSignal<f64>,
-    cutoff_01: BufferedSignal<f64>,
-    resonance_01: BufferedSignal<f64>,
-) -> state_variable_filter_first_order::Output {
-    state_variable_filter_first_order::Props {
-        signal,
-        cutoff_01,
-        resonance_01,
     }
     .into()
 }
