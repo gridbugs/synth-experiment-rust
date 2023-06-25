@@ -834,16 +834,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "synth-experiment"
+name = "synth-sdl2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chargrid_sdl2",
+ "env_logger",
+ "synth_app",
+]
+
+[[package]]
+name = "synth_app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "chargrid",
- "chargrid_sdl2",
  "cpal_sample_player",
- "env_logger",
  "line_2d",
- "log",
  "meap",
  "rgb_int",
  "synth_language",

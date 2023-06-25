@@ -14,7 +14,7 @@ impl Args {
                     .with_default(NoteName::C);
                 start_octave = opt_opt::<usize, _>("INT", "start-octave")
                     .name('o')
-                    .with_default(4);
+                    .with_default(2);
             } in {
                 Self {
                     start_note,

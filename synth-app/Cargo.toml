@@ -1,15 +1,12 @@
 [package]
-name = "synth-experiment"
+name = "synth_app"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
-chargrid_sdl2 = { git = "https://github.com/gridbugs/chargrid", rev = "5570cb5547f3fcdd3db18c2f7756895cfd78304d" }
 chargrid = { git = "https://github.com/gridbugs/chargrid", rev = "5570cb5547f3fcdd3db18c2f7756895cfd78304d" }
 cpal_sample_player = { path = "../cpal-sample-player" }
-env_logger = "0.10"
-log = "0.4"
 line_2d = "0.5"
 meap = "0.8"
 rgb_int = "0.1"

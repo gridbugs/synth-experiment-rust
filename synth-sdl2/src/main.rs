@@ -1,7 +1,4 @@
-mod app;
-mod args;
-mod music;
-mod signal_player;
+use synth_app::{self, args};
 
 fn main() -> anyhow::Result<()> {
     use chargrid_sdl2::*;
@@ -30,6 +27,6 @@ fn main() -> anyhow::Result<()> {
         underline_top_offset_cell_ratio: 0.8,
         resizable: false,
     });
-    context.run(app::app(args)?);
+    context.run(synth_app::app(args)?);
     Ok(())
 }

@@ -1,8 +1,14 @@
-use crate::{args::Args, music, signal_player::SignalPlayer};
 use chargrid::{control_flow::*, core::*, prelude::*};
 use rgb_int::Rgb24;
 use std::collections::{BTreeMap, HashMap};
 use synth_language::*;
+
+pub mod args;
+pub mod music;
+mod signal_player;
+
+use args::Args;
+use signal_player::SignalPlayer;
 
 fn make_key_synth(frequency_hz: f64, gate: Sbool) -> Sf64 {
     let lfo = lfo_01(

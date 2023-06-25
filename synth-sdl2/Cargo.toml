@@ -1,0 +1,10 @@
+[package]
+name = "synth-sdl2"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+chargrid_sdl2 = { git = "https://github.com/gridbugs/chargrid", rev = "5570cb5547f3fcdd3db18c2f7756895cfd78304d" }
+env_logger = "0.10"
+synth_app = { path = "../synth-app" }
