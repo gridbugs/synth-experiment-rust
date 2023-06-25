@@ -183,7 +183,7 @@ pub fn chebyshev_low_pass_filter(
         signal,
         cutoff_01,
         epsilon,
-        num_chained_filters: 1,
+        filter_order_half: 1,
     }
     .into()
 }
@@ -198,7 +198,7 @@ pub fn chebyshev_high_pass_filter(
         signal,
         cutoff_01,
         epsilon,
-        num_chained_filters: 1,
+        filter_order_half: 1,
     }
     .into()
 }

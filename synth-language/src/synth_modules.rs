@@ -438,18 +438,17 @@ pub mod state_variable_filter_first_order {
     }
 }
 
-pub mod chebyshev_low_pass_filter {
+pub mod butterworth_low_pass_filter {
     use crate::signal::*;
     use std::f64::consts::PI;
 
     pub struct Props {
         pub signal: BufferedSignal<f64>,
-        pub cutoff_01: BufferedSignal<f64>,
-        pub epsilon: BufferedSignal<f64>,
-        pub num_chained_filters: usize,
+        pub half_power_frequency: BufferedSignal<f64>,
+        pub filter_order_half: usize,
     }
 
-    #[derive(Default, Debug)]
+    #[derive(Default)]
     struct BufferEntry {
         a: f64,
         d1: f64,
@@ -459,13 +458,189 @@ pub mod chebyshev_low_pass_filter {
         w2: f64,
     }
 
-    #[derive(Debug)]
     struct Buffer {
         entries: Vec<BufferEntry>,
     }
 
-    const CUTOFF_MIN: f64 = 0.001;
-    const EPSILON_MIN: f64 = 0.1;
+    impl Buffer {
+        fn update_entries(&mut self, half_power_frequency: f64) {
+            // This is based on the butterworth lowpass filter at:
+            // https://exstrom.com/journal/sigproc/dsigproc.html
+            let a = ((PI * half_power_frequency) / 2.0).tan();
+            let a2 = a * a;
+            let n = self.entries.len() as f64;
+            for (i, entry) in self.entries.iter_mut().enumerate() {
+                let r = ((PI * ((2.0 * i as f64) + 1.0)) / (4.0 * n)).sin();
+                let s = a2 + (2.0 * a * r) + 1.0;
+                entry.a = a2 / s;
+                entry.d1 = (2.0 * (1.0 - a2)) / s;
+                entry.d2 = -(a2 - (2.0 * a * r) + 1.0) / s;
+            }
+        }
+
+        fn filter_sample(&mut self, mut x: f64) -> f64 {
+            for entry in self.entries.iter_mut() {
+                entry.w0 = (entry.d1 * entry.w1) + (entry.d2 * entry.w2) + x;
+                x = entry.a * (entry.w0 + (2.0 * entry.w1) + entry.w2);
+                entry.w2 = entry.w1;
+                entry.w1 = entry.w0;
+            }
+            x
+        }
+    }
+
+    struct Signal {
+        props: Props,
+        buffer: Buffer,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            let mut buffer = Buffer {
+                entries: Vec::new(),
+            };
+            for _ in 0..props.filter_order_half {
+                buffer.entries.push(Default::default());
+            }
+            Self { props, buffer }
+        }
+    }
+
+    impl SignalTrait<f64> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+            let x = self.props.signal.sample(ctx);
+            if self.buffer.entries.is_empty() {
+                return x;
+            }
+            let half_power_frequency = self.props.half_power_frequency.sample(ctx);
+            self.buffer.update_entries(half_power_frequency);
+            self.buffer.filter_sample(x)
+        }
+    }
+
+    impl From<Props> for BufferedSignal<f64> {
+        fn from(value: Props) -> Self {
+            BufferedSignal::new(Signal::new(value))
+        }
+    }
+}
+
+pub mod butterworth_high_pass_filter {
+    use crate::signal::*;
+    use std::f64::consts::PI;
+
+    pub struct Props {
+        pub signal: BufferedSignal<f64>,
+        pub half_power_frequency: BufferedSignal<f64>,
+        pub filter_order_half: usize,
+    }
+
+    #[derive(Default)]
+    struct BufferEntry {
+        a: f64,
+        d1: f64,
+        d2: f64,
+        w0: f64,
+        w1: f64,
+        w2: f64,
+    }
+
+    struct Buffer {
+        entries: Vec<BufferEntry>,
+    }
+
+    impl Buffer {
+        fn update_entries(&mut self, half_power_frequency: f64) {
+            // This is based on the butterworth highpass filter at:
+            // https://exstrom.com/journal/sigproc/dsigproc.html
+            let a = ((PI * half_power_frequency) / 2.0).tan();
+            let a2 = a * a;
+            let n = self.entries.len() as f64;
+            for (i, entry) in self.entries.iter_mut().enumerate() {
+                let r = ((PI * ((2.0 * i as f64) + 1.0)) / (4.0 * n)).sin();
+                let s = a2 + (2.0 * a * r) + 1.0;
+                entry.a = 1.0 / s;
+                entry.d1 = (2.0 * (1.0 - a2)) / s;
+                entry.d2 = -(a2 - (2.0 * a * r) + 1.0) / s;
+            }
+        }
+
+        fn filter_sample(&mut self, mut x: f64) -> f64 {
+            for entry in self.entries.iter_mut() {
+                entry.w0 = (entry.d1 * entry.w1) + (entry.d2 * entry.w2) + x;
+                x = entry.a * (entry.w0 - (2.0 * entry.w1) + entry.w2);
+                entry.w2 = entry.w1;
+                entry.w1 = entry.w0;
+            }
+            x
+        }
+    }
+
+    struct Signal {
+        props: Props,
+        buffer: Buffer,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            let mut buffer = Buffer {
+                entries: Vec::new(),
+            };
+            for _ in 0..props.filter_order_half {
+                buffer.entries.push(Default::default());
+            }
+            Self { props, buffer }
+        }
+    }
+
+    impl SignalTrait<f64> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+            let x = self.props.signal.sample(ctx);
+            if self.buffer.entries.is_empty() {
+                return x;
+            }
+            let half_power_frequency = self.props.half_power_frequency.sample(ctx);
+            self.buffer.update_entries(half_power_frequency);
+            self.buffer.filter_sample(x)
+        }
+    }
+
+    impl From<Props> for BufferedSignal<f64> {
+        fn from(value: Props) -> Self {
+            BufferedSignal::new(Signal::new(value))
+        }
+    }
+}
+
+mod chebyshev {
+    pub const EPSILON_MIN: f64 = 0.01;
+}
+
+pub mod chebyshev_low_pass_filter {
+    use super::chebyshev::*;
+    use crate::signal::*;
+    use std::f64::consts::PI;
+
+    pub struct Props {
+        pub signal: BufferedSignal<f64>,
+        pub cutoff_01: BufferedSignal<f64>,
+        pub epsilon: BufferedSignal<f64>,
+        pub filter_order_half: usize,
+    }
+
+    #[derive(Default)]
+    struct BufferEntry {
+        a: f64,
+        d1: f64,
+        d2: f64,
+        w0: f64,
+        w1: f64,
+        w2: f64,
+    }
+
+    struct Buffer {
+        entries: Vec<BufferEntry>,
+    }
 
     impl Buffer {
         fn update_entries(&mut self, cutoff_01: f64, epsilon: f64) {
@@ -510,7 +685,7 @@ pub mod chebyshev_low_pass_filter {
             let mut buffer = Buffer {
                 entries: Vec::new(),
             };
-            for _ in 0..props.num_chained_filters {
+            for _ in 0..props.filter_order_half {
                 buffer.entries.push(Default::default());
             }
             Self { props, buffer }
@@ -523,7 +698,7 @@ pub mod chebyshev_low_pass_filter {
             if self.buffer.entries.is_empty() {
                 return x;
             }
-            let cutoff_01 = self.props.cutoff_01.sample(ctx).max(CUTOFF_MIN);
+            let cutoff_01 = self.props.cutoff_01.sample(ctx);
             let epsilon = self.props.epsilon.sample(ctx).max(EPSILON_MIN);
             self.buffer.update_entries(cutoff_01, epsilon);
             let output_scaled = self.buffer.filter_sample(x);
@@ -540,6 +715,7 @@ pub mod chebyshev_low_pass_filter {
 }
 
 pub mod chebyshev_high_pass_filter {
+    use super::chebyshev::*;
     use crate::signal::*;
     use std::f64::consts::PI;
 
@@ -547,7 +723,7 @@ pub mod chebyshev_high_pass_filter {
         pub signal: BufferedSignal<f64>,
         pub cutoff_01: BufferedSignal<f64>,
         pub epsilon: BufferedSignal<f64>,
-        pub num_chained_filters: usize,
+        pub filter_order_half: usize,
     }
 
     #[derive(Default)]
@@ -564,12 +740,9 @@ pub mod chebyshev_high_pass_filter {
         entries: Vec<BufferEntry>,
     }
 
-    const CUTOFF_MIN: f64 = 0.001;
-    const EPSILON_MIN: f64 = 0.1;
-
     impl Buffer {
         fn update_entries(&mut self, cutoff_01: f64, epsilon: f64) {
-            // This is based on the chebyshev lowpass filter at:
+            // This is based on the chebyshev highpass filter at:
             // https://exstrom.com/journal/sigproc/dsigproc.html
             let a = ((PI * cutoff_01) / 2.0).tan();
             let a2 = a * a;
@@ -610,7 +783,7 @@ pub mod chebyshev_high_pass_filter {
             let mut buffer = Buffer {
                 entries: Vec::new(),
             };
-            for _ in 0..props.num_chained_filters {
+            for _ in 0..props.filter_order_half {
                 buffer.entries.push(Default::default());
             }
             Self { props, buffer }
@@ -623,7 +796,7 @@ pub mod chebyshev_high_pass_filter {
             if self.buffer.entries.is_empty() {
                 return x;
             }
-            let cutoff_01 = self.props.cutoff_01.sample(ctx).max(CUTOFF_MIN);
+            let cutoff_01 = self.props.cutoff_01.sample(ctx);
             let epsilon = self.props.epsilon.sample(ctx).max(EPSILON_MIN);
             self.buffer.update_entries(cutoff_01, epsilon);
             let output_scaled = self.buffer.filter_sample(x);
