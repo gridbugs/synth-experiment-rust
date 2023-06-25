@@ -1,9 +1,9 @@
 use crate::{
     signal::{BufferedSignal, Const, Var},
     synth_modules::{
-        adsr_envelope_exp_01, amplify, asr_envelope_lin_01, chebyshev_high_pass_filter,
-        chebyshev_low_pass_filter, moving_average_high_pass_filter, moving_average_low_pass_filter,
-        oscillator, state_variable_filter_first_order, sum, weighted_sum,
+        adsr_envelope_exp_01, amplify, asr_envelope_lin_01, biquad_filter,
+        moving_average_high_pass_filter, moving_average_low_pass_filter, oscillator,
+        state_variable_filter_first_order, sum, weighted_sum,
     },
     Waveform,
 };
@@ -173,32 +173,62 @@ pub fn state_variable_filter_first_order(
     .into()
 }
 
-/// expects cutoff as a ratio of the nyquist frequency
+pub fn butterworth_low_pass_filter(
+    signal: BufferedSignal<f64>,
+    half_power_frequency: BufferedSignal<f64>,
+) -> BufferedSignal<f64> {
+    use biquad_filter::butterworth::low_pass::*;
+    create(
+        Props {
+            signal,
+            half_power_frequency,
+        },
+        1,
+    )
+}
+
+pub fn butterworth_high_pass_filter(
+    signal: BufferedSignal<f64>,
+    half_power_frequency: BufferedSignal<f64>,
+) -> BufferedSignal<f64> {
+    use biquad_filter::butterworth::high_pass::*;
+    create(
+        Props {
+            signal,
+            half_power_frequency,
+        },
+        1,
+    )
+}
+
 pub fn chebyshev_low_pass_filter(
     signal: BufferedSignal<f64>,
     cutoff_01: BufferedSignal<f64>,
     epsilon: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
-    chebyshev_low_pass_filter::Props {
-        signal,
-        cutoff_01,
-        epsilon,
-        filter_order_half: 1,
-    }
-    .into()
+    use biquad_filter::chebyshev::low_pass::*;
+    create(
+        Props {
+            signal,
+            cutoff_01,
+            epsilon,
+        },
+        1,
+    )
 }
 
-/// expects cutoff as a ratio of the nyquist frequency
 pub fn chebyshev_high_pass_filter(
     signal: BufferedSignal<f64>,
     cutoff_01: BufferedSignal<f64>,
     epsilon: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
-    chebyshev_high_pass_filter::Props {
-        signal,
-        cutoff_01,
-        epsilon,
-        filter_order_half: 1,
-    }
-    .into()
+    use biquad_filter::chebyshev::high_pass::*;
+    create(
+        Props {
+            signal,
+            cutoff_01,
+            epsilon,
+        },
+        1,
+    )
 }
