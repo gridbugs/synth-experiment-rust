@@ -1,8 +1,8 @@
 use crate::{
     signal::{BufferedSignal, Const, Sbool, Sf64, Var},
     synth_modules::{
-        adsr_envelope_exp_01, amplify, asr_envelope_lin_01, biquad_filter, oscillator, sum,
-        weighted_sum,
+        adsr_envelope_exp_01, amplify, asr_envelope_lin_01, biquad_filter, clock, oscillator,
+        sample_and_hold, sum, weighted_sum,
     },
     Waveform,
 };
@@ -175,4 +175,14 @@ pub fn chebyshev_high_pass_filter(signal: Sf64, cutoff_hz: Sf64, epsilon: Sf64) 
         },
         1,
     )
+}
+
+pub fn sample_and_hold(signal: Sf64, trigger: Sbool) -> Sf64 {
+    use sample_and_hold::*;
+    create(Props { signal, trigger })
+}
+
+pub fn clock(frequency_hz: Sf64) -> Sbool {
+    use clock::*;
+    create(Props { frequency_hz })
 }

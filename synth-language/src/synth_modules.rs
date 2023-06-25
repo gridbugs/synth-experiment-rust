@@ -568,3 +568,71 @@ pub mod biquad_filter {
         }
     }
 }
+
+pub mod sample_and_hold {
+    use crate::signal::*;
+
+    pub struct Props {
+        pub signal: Sf64,
+        pub trigger: Sbool,
+    }
+
+    struct Signal {
+        props: Props,
+        last_sample: f64,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            Self {
+                props,
+                last_sample: 0.0,
+            }
+        }
+    }
+
+    impl SignalTrait<f64> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+            if self.props.trigger.sample(ctx) {
+                self.last_sample = self.props.signal.sample(ctx);
+            }
+            self.last_sample
+        }
+    }
+
+    pub fn create(props: Props) -> Sf64 {
+        Sf64::new(Signal::new(props))
+    }
+}
+
+pub mod clock {
+    use crate::signal::*;
+
+    pub struct Props {
+        pub frequency_hz: Sf64,
+    }
+
+    struct Signal {
+        props: Props,
+        state: f64,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            Self { props, state: 0.0 }
+        }
+    }
+
+    impl SignalTrait<bool> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> bool {
+            self.state = (self.state
+                + (self.props.frequency_hz.sample(ctx) / ctx.sample_rate as f64))
+                .rem_euclid(1.0);
+            self.state < 0.5
+        }
+    }
+
+    pub fn create(props: Props) -> Sbool {
+        Sbool::new(Signal::new(props)).trigger()
+    }
+}

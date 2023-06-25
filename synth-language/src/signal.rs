@@ -78,6 +78,13 @@ impl<T: Clone + 'static> BufferedSignal<T> {
             f,
         })
     }
+
+    pub fn force<U: Clone + 'static>(&self, forced_signal: BufferedSignal<U>) -> Self {
+        BufferedSignal::new(Force {
+            signal: self.clone_ref(),
+            forced_signal,
+        })
+    }
 }
 
 impl BufferedSignal<bool> {
@@ -188,6 +195,17 @@ impl SignalTrait<bool> for Trigger {
         let trigger_sample = sample && !self.prev_sample;
         self.prev_sample = sample;
         trigger_sample
+    }
+}
+
+struct Force<T: Clone, U: Clone> {
+    signal: BufferedSignal<T>,
+    forced_signal: BufferedSignal<U>,
+}
+impl<T: Clone + 'static, U: Clone + 'static> SignalTrait<T> for Force<T, U> {
+    fn sample(&mut self, ctx: &SignalCtx) -> T {
+        self.forced_signal.sample(ctx);
+        self.signal.sample(ctx)
     }
 }
 
