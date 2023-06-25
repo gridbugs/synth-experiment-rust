@@ -324,32 +324,35 @@ pub mod moving_average_high_pass_filter {
     }
 }
 
-pub mod state_variable_filter_first_order {
-    use crate::signal::*;
-
-    pub struct Props {
-        pub signal: BufferedSignal<f64>,
-        pub cutoff_01: BufferedSignal<f64>,
-        pub resonance_01: BufferedSignal<f64>,
-    }
-
+mod state_variable_filter {
     #[derive(Default, Debug, Clone, Copy)]
     pub struct Parts<T> {
         pub low_pass: T,
         pub band_pass: T,
         pub high_pass: T,
     }
+}
 
-    impl Parts<f64> {
-        fn next(&self, signal: f64, cutoff_01: f64, resonance_01: f64) -> Self {
-            let low_pass = self.low_pass + (cutoff_01 * self.band_pass);
-            let band_pass = signal - self.low_pass - (resonance_01 * self.band_pass);
-            let high_pass = signal - low_pass - band_pass;
-            Self {
-                low_pass,
-                band_pass,
-                high_pass,
-            }
+pub mod state_variable_filter_first_order {
+    pub use super::state_variable_filter::Parts;
+    use crate::signal::*;
+
+    pub struct PropsGen<T> {
+        pub signal: T,
+        pub cutoff_01: T,
+        pub resonance_01: T,
+    }
+
+    pub type Props = PropsGen<BufferedSignal<f64>>;
+
+    fn next_parts(parts: &Parts<f64>, props: &PropsGen<f64>) -> Parts<f64> {
+        let low_pass = parts.low_pass + (props.cutoff_01 * parts.band_pass);
+        let band_pass = props.signal - parts.low_pass - (props.resonance_01 * parts.band_pass);
+        let high_pass = props.signal - low_pass - band_pass;
+        Parts {
+            low_pass,
+            band_pass,
+            high_pass,
         }
     }
 
@@ -369,11 +372,12 @@ pub mod state_variable_filter_first_order {
 
     impl SignalTrait<Parts<f64>> for Signal {
         fn sample(&mut self, ctx: &SignalCtx) -> Parts<f64> {
-            self.state = self.state.next(
-                self.props.signal.sample(ctx),
-                self.props.cutoff_01.sample(ctx),
-                self.props.resonance_01.sample(ctx),
-            );
+            let props = PropsGen {
+                signal: self.props.signal.sample(ctx),
+                cutoff_01: self.props.cutoff_01.sample(ctx),
+                resonance_01: self.props.resonance_01.sample(ctx),
+            };
+            self.state = next_parts(&self.state, &props);
             self.state
         }
     }
@@ -388,6 +392,288 @@ pub mod state_variable_filter_first_order {
                 band_pass: parts.map(|p| p.band_pass),
                 high_pass: parts.map(|p| p.high_pass),
             }
+        }
+    }
+}
+
+mod biquad_filter {
+    use crate::signal::*;
+
+    /// Param names are taken from wikipedia. The a0 parameter is missing because it is a
+    /// normalization parameter and is assumed to be 1.
+    pub struct Params<T> {
+        pub a1: T,
+        pub a2: T,
+        pub b0: T,
+        pub b1: T,
+        pub b2: T,
+    }
+
+    pub struct PropsGen<T> {
+        pub signal: T,
+        pub params: Params<T>,
+    }
+
+    pub type Props = PropsGen<BufferedSignal<f64>>;
+
+    #[derive(Default)]
+    struct Buffers {
+        input: [f64; 2],
+        output: [f64; 2],
+    }
+
+    impl Buffers {
+        fn next_output(&self, props: &PropsGen<f64>) -> f64 {
+            (props.params.b0 * props.signal)
+                + (props.params.b1 * self.input[0])
+                + (props.params.b2 * self.input[1])
+                - (props.params.a1 * self.output[0])
+                - (props.params.a2 * self.output[1])
+        }
+
+        fn next(&mut self, props: &PropsGen<f64>) -> f64 {
+            let next_output = self.next_output(props);
+            self.input[1] = self.input[0];
+            self.input[0] = props.signal;
+            self.output[1] = self.output[0];
+            self.output[0] = next_output;
+            next_output
+        }
+    }
+
+    struct Signal {
+        props: Props,
+        buffers: Buffers,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            Self {
+                props,
+                buffers: Default::default(),
+            }
+        }
+    }
+
+    impl SignalTrait<f64> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+            let props = PropsGen {
+                signal: self.props.signal.sample(ctx),
+                params: Params {
+                    a1: self.props.params.a1.sample(ctx),
+                    a2: self.props.params.a2.sample(ctx),
+                    b0: self.props.params.b0.sample(ctx),
+                    b1: self.props.params.b1.sample(ctx),
+                    b2: self.props.params.b2.sample(ctx),
+                },
+            };
+            self.buffers.next(&props)
+        }
+    }
+
+    impl From<Props> for BufferedSignal<f64> {
+        fn from(value: Props) -> Self {
+            BufferedSignal::new(Signal::new(value))
+        }
+    }
+}
+
+pub mod chebyshev_low_pass_filter {
+    use crate::signal::*;
+    use std::f64::consts::PI;
+
+    pub struct Props {
+        pub signal: BufferedSignal<f64>,
+        pub cutoff_01: BufferedSignal<f64>,
+        pub epsilon: BufferedSignal<f64>,
+        pub num_chained_filters: usize,
+    }
+
+    #[derive(Default)]
+    struct BufferEntry {
+        a: f64,
+        d1: f64,
+        d2: f64,
+        w0: f64,
+        w1: f64,
+        w2: f64,
+    }
+
+    struct Buffer {
+        entries: Vec<BufferEntry>,
+    }
+
+    const CUTOFF_MIN: f64 = 0.001;
+    const EPSILON_MIN: f64 = 0.1;
+
+    impl Buffer {
+        fn update_entries(&mut self, cutoff_01: f64, epsilon: f64) {
+            // This is based on the chebyshev lowpass filter at:
+            // https://exstrom.com/journal/sigproc/dsigproc.html
+            let a = ((PI * cutoff_01) / 2.0).tan();
+            let a2 = a * a;
+            let u = ((1.0 + (1.0 + (epsilon * epsilon)).sqrt()) / epsilon).ln();
+            let n = (self.entries.len() * 2) as f64;
+            let su = (u / n).sinh();
+            let cu = (u / n).cosh();
+            for (i, entry) in self.entries.iter_mut().enumerate() {
+                let theta = (PI * ((2.0 * i as f64) + 1.0)) / (2.0 * n);
+                let b = theta.sin() * su;
+                let c = theta.cos() * cu;
+                let c = (b * b) + (c * c);
+                let s = (a2 * c) + (2.0 * a * b) + 1.0;
+                entry.a = a2 / (4.0 * s);
+                entry.d1 = (2.0 * (1.0 - (a2 * c))) / s;
+                entry.d2 = -((a2 * c) - (2.0 * a * b) + 1.0) / s;
+            }
+        }
+
+        fn filter_sample(&mut self, mut x: f64) -> f64 {
+            for entry in self.entries.iter_mut() {
+                entry.w0 = (entry.d1 * entry.w1) + (entry.d2 * entry.w2) + x;
+                x = entry.a * (entry.w0 + (2.0 * entry.w1) + entry.w2);
+                entry.w2 = entry.w1;
+                entry.w1 = entry.w0;
+            }
+            x
+        }
+    }
+
+    struct Signal {
+        props: Props,
+        buffer: Buffer,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            let mut buffer = Buffer {
+                entries: Vec::new(),
+            };
+            for _ in 0..props.num_chained_filters {
+                buffer.entries.push(Default::default());
+            }
+            Self { props, buffer }
+        }
+    }
+
+    impl SignalTrait<f64> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+            let x = self.props.signal.sample(ctx);
+            if self.buffer.entries.is_empty() {
+                return x;
+            }
+            let cutoff_01 = self.props.cutoff_01.sample(ctx).max(CUTOFF_MIN);
+            let epsilon = self.props.epsilon.sample(ctx).max(EPSILON_MIN);
+            self.buffer.update_entries(cutoff_01, epsilon);
+            let output_scaled = self.buffer.filter_sample(x);
+            let scale_factor = (1.0 - (-epsilon).exp()) / 2.0;
+            output_scaled / scale_factor
+        }
+    }
+
+    impl From<Props> for BufferedSignal<f64> {
+        fn from(value: Props) -> Self {
+            BufferedSignal::new(Signal::new(value))
+        }
+    }
+}
+
+pub mod chebyshev_high_pass_filter {
+    use crate::signal::*;
+    use std::f64::consts::PI;
+
+    pub struct Props {
+        pub signal: BufferedSignal<f64>,
+        pub cutoff_01: BufferedSignal<f64>,
+        pub epsilon: BufferedSignal<f64>,
+        pub num_chained_filters: usize,
+    }
+
+    #[derive(Default)]
+    struct BufferEntry {
+        a: f64,
+        d1: f64,
+        d2: f64,
+        w0: f64,
+        w1: f64,
+        w2: f64,
+    }
+
+    struct Buffer {
+        entries: Vec<BufferEntry>,
+    }
+
+    const CUTOFF_MIN: f64 = 0.001;
+    const EPSILON_MIN: f64 = 0.1;
+
+    impl Buffer {
+        fn update_entries(&mut self, cutoff_01: f64, epsilon: f64) {
+            // This is based on the chebyshev lowpass filter at:
+            // https://exstrom.com/journal/sigproc/dsigproc.html
+            let a = ((PI * cutoff_01) / 2.0).tan();
+            let a2 = a * a;
+            let u = ((1.0 + (1.0 + (epsilon * epsilon)).sqrt()) / epsilon).ln();
+            let n = (self.entries.len() * 2) as f64;
+            let su = (u / n).sinh();
+            let cu = (u / n).cosh();
+            for (i, entry) in self.entries.iter_mut().enumerate() {
+                let theta = (PI * ((2.0 * i as f64) + 1.0)) / (2.0 * n);
+                let b = theta.sin() * su;
+                let c = theta.cos() * cu;
+                let c = (b * b) + (c * c);
+                let s = a2 + (2.0 * a * b) + c;
+                entry.a = 1.0 / (4.0 * s);
+                entry.d1 = (2.0 * (c - a2)) / s;
+                entry.d2 = -(a2 - (2.0 * a * b) + c) / s;
+            }
+        }
+
+        fn filter_sample(&mut self, mut x: f64) -> f64 {
+            for entry in self.entries.iter_mut() {
+                entry.w0 = (entry.d1 * entry.w1) + (entry.d2 * entry.w2) + x;
+                x = entry.a * (entry.w0 - (2.0 * entry.w1) + entry.w2);
+                entry.w2 = entry.w1;
+                entry.w1 = entry.w0;
+            }
+            x
+        }
+    }
+
+    struct Signal {
+        props: Props,
+        buffer: Buffer,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            let mut buffer = Buffer {
+                entries: Vec::new(),
+            };
+            for _ in 0..props.num_chained_filters {
+                buffer.entries.push(Default::default());
+            }
+            Self { props, buffer }
+        }
+    }
+
+    impl SignalTrait<f64> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+            let x = self.props.signal.sample(ctx);
+            if self.buffer.entries.is_empty() {
+                return x;
+            }
+            let cutoff_01 = self.props.cutoff_01.sample(ctx).max(CUTOFF_MIN);
+            let epsilon = self.props.epsilon.sample(ctx).max(EPSILON_MIN);
+            self.buffer.update_entries(cutoff_01, epsilon);
+            let output_scaled = self.buffer.filter_sample(x);
+            let scale_factor = (1.0 - (-epsilon).exp()) / 2.0;
+            output_scaled / scale_factor
+        }
+    }
+
+    impl From<Props> for BufferedSignal<f64> {
+        fn from(value: Props) -> Self {
+            BufferedSignal::new(Signal::new(value))
         }
     }
 }

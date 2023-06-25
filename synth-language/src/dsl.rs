@@ -1,9 +1,9 @@
 use crate::{
     signal::{BufferedSignal, Const, Var},
     synth_modules::{
-        adsr_envelope_exp_01, amplify, moving_average_high_pass_filter,
-        moving_average_low_pass_filter, oscillator, state_variable_filter_first_order, sum,
-        weighted_sum,
+        adsr_envelope_exp_01, amplify, chebyshev_high_pass_filter, chebyshev_low_pass_filter,
+        moving_average_high_pass_filter, moving_average_low_pass_filter, oscillator,
+        state_variable_filter_first_order, sum, weighted_sum,
     },
     Waveform,
 };
@@ -156,6 +156,34 @@ pub fn state_variable_filter_first_order(
         signal,
         cutoff_01,
         resonance_01,
+    }
+    .into()
+}
+
+pub fn chebyshev_low_pass_filter(
+    signal: BufferedSignal<f64>,
+    cutoff_01: BufferedSignal<f64>,
+    epsilon: BufferedSignal<f64>,
+) -> BufferedSignal<f64> {
+    chebyshev_low_pass_filter::Props {
+        signal,
+        cutoff_01,
+        epsilon,
+        num_chained_filters: 1,
+    }
+    .into()
+}
+
+pub fn chebyshev_high_pass_filter(
+    signal: BufferedSignal<f64>,
+    cutoff_01: BufferedSignal<f64>,
+    epsilon: BufferedSignal<f64>,
+) -> BufferedSignal<f64> {
+    chebyshev_high_pass_filter::Props {
+        signal,
+        cutoff_01,
+        epsilon,
+        num_chained_filters: 1,
     }
     .into()
 }

@@ -7,21 +7,20 @@ use synth_language::*;
 fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSignal<f64> {
     let lfo = lfo_01(
         const_(Waveform::Saw),
-        //const_(-frequency_hz / 160.),
-        const_(-5.0),
+        const_(frequency_hz / 200.),
         gate.trigger(),
         const_(0.5),
     );
     let waveform = Waveform::Saw;
     let osc = sum(vec![oscillator(
         const_(waveform),
-        const_(frequency_hz / 4.0), // * (lfo.clone_ref() * 10.0),
-        const_(0.5),
+        const_(frequency_hz / 8.0), // + (lfo.clone_ref() * 4.0),
+        const_(0.2),
     )]);
     let filter_envelope = adsr_envelope_exp_01(
         gate.clone_ref(),
-        const_(3.0),
-        const_(0.0),
+        const_(4.0),
+        const_(1.0),
         const_(1.0),
         const_(1.0),
     );
@@ -30,15 +29,22 @@ fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSign
         const_(0.1),
         const_(0.0),
         const_(1.0),
-        const_(3.0),
-    );
-    let filtered_osc = state_variable_filter_first_order(
-        osc.clone_ref(),
-        weighted_sum_const_pair(0.5, filter_envelope.clone_ref(), lfo).map(|x| x.max(0.0)) * 0.05,
         const_(1.0),
-    )
-    .low_pass;
-    amplify(filtered_osc, amplify_envelope)
+    );
+    let filtered_osc = osc.clone_ref();
+    let filtered_osc = chebyshev_low_pass_filter(
+        filtered_osc,
+        state_variable_filter_first_order(
+            weighted_sum_const_pair(0.01, filter_envelope.clone_ref(), lfo * (1.0))
+                .map(|x| x.clamp(0.0, 1.0)),
+            const_(0.001),
+            const_(1.0),
+        )
+        .low_pass,
+        const_(5.0),
+    );
+    let filtered_osc = chebyshev_high_pass_filter(filtered_osc, const_(0.0), const_(0.1));
+    amplify(filtered_osc, amplify_envelope).map(|x| x.clamp(-1.0, 1.0))
 }
 
 struct Note {
@@ -91,10 +97,18 @@ impl AppData {
             key_synths.push(make_key_synth(note.frequency, note.gate.clone_ref().into()));
         }
         let keyboard_synth = sum(key_synths);
-        let (mouse_x_signal, mouse_x_var) = var(0.0);
-        let (mouse_y_signal, mouse_y_var) = var(0.0);
-        let f = state_variable_filter_first_order(keyboard_synth, mouse_x_signal, mouse_y_signal);
-        let filtered_synth = f.low_pass;
+        let (mouse_x_signal, mouse_x_var) = var(0.0_f64);
+        let (mouse_y_signal, mouse_y_var) = var(0.0_f64);
+        let filtered_synth = chebyshev_low_pass_filter(
+            keyboard_synth,
+            state_variable_filter_first_order(
+                mouse_x_signal.map(|x| (5.0 * (x - 1.0)).exp()),
+                const_(0.0005),
+                const_(1.0),
+            )
+            .low_pass,
+            mouse_y_signal * 10.0,
+        );
         Ok(Self {
             mouse_coord: None,
             signal_player,
@@ -155,7 +169,7 @@ impl Component for GuiComponent {
                     for coord in line_2d::coords_between(prev, coord) {
                         let cell = RenderCell::default()
                             .with_character(' ')
-                            .with_background(Rgba32::new(255, 128, 128, 255));
+                            .with_background(Rgba32::new_grey(255));
                         fb.set_cell_relative_to_ctx(ctx, coord, 0, cell);
                     }
                 }
