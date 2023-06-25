@@ -1,8 +1,11 @@
 mod app;
+mod args;
+mod music;
 mod signal_player;
 
 fn main() -> anyhow::Result<()> {
     use chargrid_sdl2::*;
+    let args = args::parse();
     env_logger::init();
     let context = Context::new(Config {
         font_bytes: FontBytes {
@@ -27,6 +30,6 @@ fn main() -> anyhow::Result<()> {
         underline_top_offset_cell_ratio: 0.8,
         resizable: false,
     });
-    context.run(app::app()?);
+    context.run(app::app(args)?);
     Ok(())
 }

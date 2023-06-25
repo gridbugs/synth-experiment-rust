@@ -503,10 +503,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "maplit"
-version = "1.0.2"
+name = "meap"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
+checksum = "619dd7d6072b77a255e4182358b76957f29abb24bbf3f95484ea04fdde025d10"
 
 [[package]]
 name = "memchr"
@@ -844,7 +844,7 @@ dependencies = [
  "env_logger",
  "line_2d",
  "log",
- "maplit",
+ "meap",
  "rgb_int",
  "synth_language",
 ]

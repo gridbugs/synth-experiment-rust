@@ -1,4 +1,4 @@
-use crate::signal_player::SignalPlayer;
+use crate::{args::Args, music, signal_player::SignalPlayer};
 use chargrid::{control_flow::*, core::*, prelude::*};
 use rgb_int::Rgb24;
 use std::collections::{BTreeMap, HashMap};
@@ -7,30 +7,26 @@ use synth_language::*;
 fn make_key_synth(frequency_hz: f64, gate: Sbool) -> Sf64 {
     let lfo = lfo_01(
         const_(Waveform::Saw),
-        const_(frequency_hz / 200.),
+        const_(2.0),
         gate.trigger(),
         const_(0.5),
     );
     let waveform = Waveform::Saw;
-    let osc = sum(vec![oscillator(
-        const_(waveform),
-        const_(frequency_hz / 8.0), // + (lfo.clone_ref() * 4.0),
-        const_(0.2),
-    )]);
+    let osc = sum(vec![
+        oscillator(const_(waveform), const_(frequency_hz), const_(0.2)),
+        oscillator(const_(waveform), const_(frequency_hz / 2.0), const_(0.2)),
+    ]);
     let filter_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.2), const_(0.2))
         .map(|x| 2000.0 * (2.0 * (x - 1.0)).exp());
     let amplify_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.1), const_(0.2));
     let filtered_osc = osc.clone_ref();
     let filtered_osc = chebyshev_low_pass_filter(
         filtered_osc,
-        butterworth_low_pass_filter(
-            weighted_sum_const_pair(1.0, filter_envelope, lfo * (1.0)).map(|x| x.clamp(0.0, 1.0)),
-            const_(10.0),
-        ),
+        weighted_sum_const_pair(0.5, filter_envelope, lfo * 2000.0).clamp_nyquist(),
         const_(5.0),
     );
-    let filtered_osc = chebyshev_high_pass_filter(filtered_osc, const_(0.0), const_(0.1));
-    amplify(filtered_osc, amplify_envelope).map(|x| x.clamp(-1.0, 1.0))
+    // let filtered_osc = chebyshev_high_pass_filter(filtered_osc, const_(0.0), const_(0.1));
+    amplify(filtered_osc, amplify_envelope)
 }
 
 struct Note {
@@ -60,24 +56,38 @@ struct AppData {
     recent_samples: Vec<f32>,
 }
 
+fn make_notes_even_temp(base_freq: f64, keys: &[char]) -> Vec<(char, Note)> {
+    let mut mappings = Vec::new();
+    for (i, &ch) in keys.iter().enumerate() {
+        let freq = music::note_frequency_even_temperement(base_freq, i as f64);
+        mappings.push((ch, Note::new(freq)));
+    }
+    mappings
+}
+
 impl AppData {
-    fn new() -> anyhow::Result<Self> {
+    fn new(args: Args) -> anyhow::Result<Self> {
         let signal_player = SignalPlayer::new()?;
-        let keyboard = maplit::btreemap! {
-            'a' => Note::new(261.63), // C
-            'o' => Note::new(293.66), // D
-            'e' => Note::new(329.63), // E
-            'u' => Note::new(349.23), // F
-            'i' => Note::new(392.00), // G
-            'd' => Note::new(440.00), // A
-            'h' => Note::new(493.88), // B
-            't' => Note::new(523.25), // C
-            ',' => Note::new(277.18), // C sharp
-            '.' => Note::new(311.13), // D sharp
-            'y' => Note::new(369.99), // F sharp
-            'f' => Note::new(415.30), // G sharp
-            'g' => Note::new(466.16), // A sharp
-        };
+        let start_frequency = args.start_note.frequency_in_octave(args.start_octave);
+        let keyboard: BTreeMap<char, Note> = vec![
+            make_notes_even_temp(
+                start_frequency,
+                &[
+                    'a', ',', 'o', '.', 'e', 'u', 'y', 'i', 'f', 'd', 'g', 'h', 't', 'r', 'n',
+                ],
+            )
+            .into_iter(),
+            make_notes_even_temp(
+                start_frequency * 2.0,
+                &[
+                    'A', '<', 'O', '>', 'E', 'U', 'Y', 'I', 'F', 'D', 'G', 'H', 'T', 'R', 'N',
+                ],
+            )
+            .into_iter(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
         let mut key_synths: Vec<Sf64> = Vec::new();
         for note in keyboard.values() {
             key_synths.push(make_key_synth(note.frequency, note.gate.clone_ref().into()));
@@ -86,13 +96,14 @@ impl AppData {
         let (mouse_x_signal, mouse_x_var) = var(0.0_f64);
         let (mouse_y_signal, mouse_y_var) = var(0.0_f64);
         let filtered_synth = chebyshev_low_pass_filter(
-            keyboard_synth,
+            keyboard_synth.clone_ref(),
             butterworth_low_pass_filter(
-                mouse_x_signal.map(|x| (5.0 * (x - 1.0)).exp()),
+                mouse_x_signal.map(|x| 5000.0 * (5.0 * (x - 1.0)).exp()),
                 const_(10.0),
             ),
             mouse_y_signal * 10.0,
-        );
+        )
+        .map(|x| (1.5 * x).clamp(-2.0, 2.0));
         Ok(Self {
             mouse_coord: None,
             signal_player,
@@ -241,8 +252,8 @@ impl Component for GuiComponent {
     }
 }
 
-pub fn app() -> anyhow::Result<App> {
-    let app_data = AppData::new()?;
+pub fn app(args: Args) -> anyhow::Result<App> {
+    let app_data = AppData::new(args)?;
     Ok(cf(GuiComponent)
         .with_state(app_data)
         .clear_each_frame()
