@@ -1,8 +1,8 @@
 use crate::{
     signal::{BufferedSignal, Const, Sbool, Sf64, Var},
     synth_modules::{
-        adsr_envelope_exp_01, amplify, asr_envelope_lin_01, biquad_filter, clock, oscillator,
-        random_uniform, sample_and_hold, sum, weighted_sum,
+        amplify, asr_envelope_lin_01, biquad_filter, clock, oscillator, random_uniform,
+        sample_and_hold, sum, weighted_sum,
     },
     Waveform,
 };
@@ -110,23 +110,6 @@ pub fn asr_envelope_lin_01(gate: Sbool, attack_seconds: Sf64, release_seconds: S
     create(Props {
         gate,
         attack_seconds,
-        release_seconds,
-    })
-}
-
-pub fn adsr_envelope_exp_01(
-    gate: Sbool,
-    attack_seconds: Sf64,
-    decay_seconds: Sf64,
-    sustain_level_01: Sf64,
-    release_seconds: Sf64,
-) -> Sf64 {
-    use adsr_envelope_exp_01::*;
-    create(Props {
-        gate,
-        attack_seconds,
-        decay_seconds,
-        sustain_level_01,
         release_seconds,
     })
 }
