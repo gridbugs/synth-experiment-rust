@@ -13,7 +13,7 @@ use signal_player::SignalPlayer;
 fn make_key_synth(frequency_hz: f64, gate: Sbool, clock: Sbool) -> Sf64 {
     let noise = random_uniform();
     let lfo = lfo_01(
-        const_(Waveform::Triangle),
+        const_(Waveform::Saw),
         const_(0.5),
         gate.trigger(),
         const_(0.5),
@@ -108,7 +108,7 @@ impl AppData {
             ),
             mouse_y_signal * 10.0,
         )
-        .map(|x| (1.0 * x).clamp(-3.0, 3.0));
+        .map(|x| (1.0 * x).clamp(-4.0, 4.0));
         Ok(Self {
             mouse_coord: None,
             signal_player,
