@@ -363,13 +363,13 @@ pub mod biquad_filter {
 
         pub struct Props {
             pub signal: BufferedSignal<f64>,
-            pub half_power_frequency: BufferedSignal<f64>,
+            pub half_power_frequency_hz: BufferedSignal<f64>,
         }
 
         type Signal = SignalGen<Props>;
 
         trait UpdateBufferTrait {
-            fn update_entries(buffer: &mut Buffer, half_power_frequency: f64);
+            fn update_entries(buffer: &mut Buffer, half_power_frequency_hz: f64);
         }
 
         fn sample<U: UpdateBufferTrait, P: PassTrait>(signal: &mut Signal, ctx: &SignalCtx) -> f64 {
@@ -377,8 +377,10 @@ pub mod biquad_filter {
             if signal.buffer.entries.is_empty() {
                 return sample;
             }
-            let half_power_frequency = signal.props.half_power_frequency.sample(ctx);
-            U::update_entries(&mut signal.buffer, half_power_frequency);
+            let half_power_frequency_hz = signal.props.half_power_frequency_hz.sample(ctx);
+            let half_power_frequency_sample_rate_ratio =
+                half_power_frequency_hz / ctx.sample_rate as f64;
+            U::update_entries(&mut signal.buffer, half_power_frequency_sample_rate_ratio);
             P::apply(&mut signal.buffer, sample)
         }
 
@@ -389,8 +391,11 @@ pub mod biquad_filter {
 
             struct UpdateBuffer;
             impl UpdateBufferTrait for UpdateBuffer {
-                fn update_entries(buffer: &mut Buffer, half_power_frequency: f64) {
-                    let a = ((PI * half_power_frequency) / 2.0).tan();
+                fn update_entries(
+                    buffer: &mut Buffer,
+                    half_power_frequency_sample_rate_ratio: f64,
+                ) {
+                    let a = (PI * half_power_frequency_sample_rate_ratio).tan();
                     let a2 = a * a;
                     let n = buffer.entries.len() as f64;
                     for (i, entry) in buffer.entries.iter_mut().enumerate() {
@@ -423,8 +428,11 @@ pub mod biquad_filter {
 
             struct UpdateBuffer;
             impl UpdateBufferTrait for UpdateBuffer {
-                fn update_entries(buffer: &mut Buffer, half_power_frequency: f64) {
-                    let a = ((PI * half_power_frequency) / 2.0).tan();
+                fn update_entries(
+                    buffer: &mut Buffer,
+                    half_power_frequency_sample_rate_ratio: f64,
+                ) {
+                    let a = (PI * half_power_frequency_sample_rate_ratio).tan();
                     let a2 = a * a;
                     let n = buffer.entries.len() as f64;
                     for (i, entry) in buffer.entries.iter_mut().enumerate() {
@@ -459,14 +467,14 @@ pub mod biquad_filter {
 
         pub struct Props {
             pub signal: BufferedSignal<f64>,
-            pub cutoff_01: BufferedSignal<f64>,
+            pub cutoff_hz: BufferedSignal<f64>,
             pub epsilon: BufferedSignal<f64>,
         }
 
         type Signal = SignalGen<Props>;
 
         trait UpdateBufferTrait {
-            fn update_entries(buffer: &mut Buffer, cutoff_01: f64, epsilon: f64);
+            fn update_entries(buffer: &mut Buffer, cutoff_hz: f64, epsilon: f64);
         }
 
         fn sample<U: UpdateBufferTrait, P: PassTrait>(signal: &mut Signal, ctx: &SignalCtx) -> f64 {
@@ -474,9 +482,10 @@ pub mod biquad_filter {
             if signal.buffer.entries.is_empty() {
                 return sample;
             }
-            let cutoff_01 = signal.props.cutoff_01.sample(ctx);
+            let cutoff_hz = signal.props.cutoff_hz.sample(ctx);
+            let cutoff_sample_rate_ratio = cutoff_hz / ctx.sample_rate as f64;
             let epsilon = signal.props.epsilon.sample(ctx).max(EPSILON_MIN);
-            U::update_entries(&mut signal.buffer, cutoff_01, epsilon);
+            U::update_entries(&mut signal.buffer, cutoff_sample_rate_ratio, epsilon);
             let output_scaled = P::apply(&mut signal.buffer, sample);
             let scale_factor = (1.0 - (-epsilon).exp()) / 2.0;
             output_scaled / scale_factor
@@ -489,8 +498,12 @@ pub mod biquad_filter {
 
             struct UpdateBuffer;
             impl UpdateBufferTrait for UpdateBuffer {
-                fn update_entries(buffer: &mut Buffer, cutoff_01: f64, epsilon: f64) {
-                    let a = ((PI * cutoff_01) / 2.0).tan();
+                fn update_entries(
+                    buffer: &mut Buffer,
+                    cutoff_sample_rate_ratio: f64,
+                    epsilon: f64,
+                ) {
+                    let a = (PI * cutoff_sample_rate_ratio).tan();
                     let a2 = a * a;
                     let u = ((1.0 + (1.0 + (epsilon * epsilon)).sqrt()) / epsilon).ln();
                     let n = (buffer.entries.len() * 2) as f64;
@@ -529,8 +542,12 @@ pub mod biquad_filter {
 
             struct UpdateBuffer;
             impl UpdateBufferTrait for UpdateBuffer {
-                fn update_entries(buffer: &mut Buffer, cutoff_01: f64, epsilon: f64) {
-                    let a = ((PI * cutoff_01) / 2.0).tan();
+                fn update_entries(
+                    buffer: &mut Buffer,
+                    cutoff_sample_rate_ratio: f64,
+                    epsilon: f64,
+                ) {
+                    let a = (PI * cutoff_sample_rate_ratio).tan();
                     let a2 = a * a;
                     let u = ((1.0 + (1.0 + (epsilon * epsilon)).sqrt()) / epsilon).ln();
                     let n = (buffer.entries.len() * 2) as f64;

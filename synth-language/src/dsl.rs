@@ -147,13 +147,13 @@ pub fn adsr_envelope_exp_01(
 
 pub fn butterworth_low_pass_filter(
     signal: BufferedSignal<f64>,
-    half_power_frequency: BufferedSignal<f64>,
+    half_power_frequency_hz: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
     use biquad_filter::butterworth::low_pass::*;
     create(
         Props {
             signal,
-            half_power_frequency,
+            half_power_frequency_hz,
         },
         1,
     )
@@ -161,13 +161,13 @@ pub fn butterworth_low_pass_filter(
 
 pub fn butterworth_high_pass_filter(
     signal: BufferedSignal<f64>,
-    half_power_frequency: BufferedSignal<f64>,
+    half_power_frequency_hz: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
     use biquad_filter::butterworth::high_pass::*;
     create(
         Props {
             signal,
-            half_power_frequency,
+            half_power_frequency_hz,
         },
         1,
     )
@@ -175,14 +175,14 @@ pub fn butterworth_high_pass_filter(
 
 pub fn chebyshev_low_pass_filter(
     signal: BufferedSignal<f64>,
-    cutoff_01: BufferedSignal<f64>,
+    cutoff_hz: BufferedSignal<f64>,
     epsilon: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
     use biquad_filter::chebyshev::low_pass::*;
     create(
         Props {
             signal,
-            cutoff_01,
+            cutoff_hz,
             epsilon,
         },
         1,
@@ -191,14 +191,14 @@ pub fn chebyshev_low_pass_filter(
 
 pub fn chebyshev_high_pass_filter(
     signal: BufferedSignal<f64>,
-    cutoff_01: BufferedSignal<f64>,
+    cutoff_hz: BufferedSignal<f64>,
     epsilon: BufferedSignal<f64>,
 ) -> BufferedSignal<f64> {
     use biquad_filter::chebyshev::high_pass::*;
     create(
         Props {
             signal,
-            cutoff_01,
+            cutoff_hz,
             epsilon,
         },
         1,
