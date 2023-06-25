@@ -24,6 +24,7 @@ impl SamplePlayerCore {
         let config = device.default_output_config()?;
         log::info!("sample format: {}", config.sample_format());
         log::info!("sample rate: {}", config.sample_rate().0);
+        log::info!("num channels: {}", config.channels());
         let config = StreamConfig::from(config);
         Ok(Self { device, config })
     }
@@ -45,13 +46,16 @@ impl<T: SizedSample + Send + 'static> SamplePlayer<T> {
         let sink_cursor = Arc::new(RwLock::new(0));
         let sink_cursor_for_cpal_thread = Arc::clone(&sink_cursor);
         let core = SamplePlayerCore::new()?;
+        let channels = core.config.channels;
         let stream = core.device.build_output_stream(
             &core.config,
             move |data: &mut [T], _: &OutputCallbackInfo| {
                 let mut sink_cursor = sink_cursor_for_cpal_thread.write().unwrap();
-                for output in data.iter_mut() {
+                for output in data.chunks_mut(channels as usize) {
                     if let Ok(input) = receiver.try_recv() {
-                        *output = input;
+                        for element in output {
+                            *element = input;
+                        }
                         *sink_cursor += 1;
                     } else {
                         break;
@@ -87,22 +91,23 @@ impl<T: SizedSample + Send + 'static> SamplePlayer<T> {
         &mut self.buffer_padding
     }
 
-    pub fn play_sample(&mut self, sample: T) {
+    fn play_sample(&mut self, sample: T) {
         if let Err(_) = self.sender.send(sample) {
             log::error!("failed to send data to cpal thread");
         }
         self.source_cursor += 1;
     }
 
-    pub fn samples_behind(&self) -> u64 {
+    fn samples_behind(&self) -> u64 {
         let sink_cursor = *self.sink_cursor.read().unwrap();
         let target_source_cursor = sink_cursor + self.buffer_padding;
         target_source_cursor - self.source_cursor
     }
 
     pub fn play_stream<S: FnMut() -> T>(&mut self, mut stream: S) {
-        for _ in 0..self.samples_behind() {
-            self.play_sample(stream());
+        // only send data once per channel
+        for _ in 0..(self.samples_behind() / self.core.config.channels as u64) {
+            self.play_sample(stream())
         }
     }
 }

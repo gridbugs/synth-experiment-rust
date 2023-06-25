@@ -2,18 +2,18 @@ use crate::{
     signal::{BufferedSignal, Const, Sbool, Sf64, Var},
     synth_modules::{
         adsr_envelope_exp_01, amplify, asr_envelope_lin_01, biquad_filter, clock, oscillator,
-        sample_and_hold, sum, weighted_sum,
+        random_uniform, sample_and_hold, sum, weighted_sum,
     },
     Waveform,
 };
 
 pub fn const_<T: Clone + 'static>(value: T) -> BufferedSignal<T> {
-    Const::new(value).into()
+    Const::new(value).into_buffered_signal()
 }
 
 pub fn var<T: Clone + 'static>(value: T) -> (BufferedSignal<T>, Var<T>) {
     let var = Var::new(value);
-    (var.clone_ref().into(), var)
+    (var.clone_ref().into_buffered_signal(), var)
 }
 
 pub fn lfo(
@@ -185,4 +185,9 @@ pub fn sample_and_hold(signal: Sf64, trigger: Sbool) -> Sf64 {
 pub fn clock(frequency_hz: Sf64) -> Sbool {
     use clock::*;
     create(Props { frequency_hz })
+}
+
+pub fn random_uniform() -> Sf64 {
+    use random_uniform::*;
+    create()
 }

@@ -594,6 +594,7 @@ pub mod sample_and_hold {
     impl SignalTrait<f64> for Signal {
         fn sample(&mut self, ctx: &SignalCtx) -> f64 {
             if self.props.trigger.sample(ctx) {
+                //println!("{}", ctx.sample_index);
                 self.last_sample = self.props.signal.sample(ctx);
             }
             self.last_sample
@@ -628,11 +629,46 @@ pub mod clock {
             self.state = (self.state
                 + (self.props.frequency_hz.sample(ctx) / ctx.sample_rate as f64))
                 .rem_euclid(1.0);
+            /*
+            println!(
+                "{} {} {}",
+                self.state,
+                ctx.sample_index / ctx.sample_rate as u64,
+                ctx.sample_rate
+            ); */
             self.state < 0.5
         }
     }
 
     pub fn create(props: Props) -> Sbool {
         Sbool::new(Signal::new(props)).trigger()
+    }
+}
+
+pub mod random_uniform {
+    use crate::signal::*;
+    use rand::{Rng, SeedableRng};
+    use rand_xorshift::XorShiftRng;
+
+    struct Signal {
+        rng: XorShiftRng,
+    }
+
+    impl Signal {
+        fn new() -> Self {
+            Self {
+                rng: XorShiftRng::from_entropy(),
+            }
+        }
+    }
+
+    impl SignalTrait<f64> for Signal {
+        fn sample(&mut self, _ctx: &SignalCtx) -> f64 {
+            self.rng.gen()
+        }
+    }
+
+    pub fn create() -> Sf64 {
+        Sf64::new(Signal::new())
     }
 }

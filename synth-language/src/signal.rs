@@ -105,11 +105,15 @@ impl Sf64 {
     }
 }
 
-pub struct Const<T>(T);
+pub struct Const<T: Clone>(T);
 
-impl<T> Const<T> {
+impl<T: Clone + 'static> Const<T> {
     pub fn new(value: T) -> Self {
         Self(value)
+    }
+
+    pub fn into_buffered_signal(self) -> BufferedSignal<T> {
+        BufferedSignal::new(self)
     }
 }
 
@@ -119,15 +123,9 @@ impl<T: Clone> SignalTrait<T> for Const<T> {
     }
 }
 
-impl<T: Clone + 'static> From<Const<T>> for BufferedSignal<T> {
-    fn from(value: Const<T>) -> Self {
-        BufferedSignal::new(value)
-    }
-}
-
 pub struct Var<T>(Rc<RefCell<T>>);
 
-impl<T: Clone> Var<T> {
+impl<T: Clone + 'static> Var<T> {
     pub fn new(value: T) -> Self {
         Self(Rc::new(RefCell::new(value)))
     }
@@ -143,17 +141,15 @@ impl<T: Clone> Var<T> {
     pub fn set(&self, value: T) {
         *self.0.borrow_mut().deref_mut() = value;
     }
-}
 
-impl<T: Clone> SignalTrait<T> for Var<T> {
-    fn sample(&mut self, _ctx: &SignalCtx) -> T {
-        self.get()
+    pub fn into_buffered_signal(self) -> BufferedSignal<T> {
+        BufferedSignal::new(self)
     }
 }
 
-impl<T: Clone + 'static> From<Var<T>> for BufferedSignal<T> {
-    fn from(value: Var<T>) -> Self {
-        BufferedSignal::new(value)
+impl<T: Clone + 'static> SignalTrait<T> for Var<T> {
+    fn sample(&mut self, _ctx: &SignalCtx) -> T {
+        self.get()
     }
 }
 

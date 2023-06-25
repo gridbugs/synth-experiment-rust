@@ -10,19 +10,20 @@ mod signal_player;
 use args::Args;
 use signal_player::SignalPlayer;
 
-fn make_key_synth(frequency_hz: f64, gate: Sbool) -> Sf64 {
-    let clock = clock(const_(4.0));
+fn make_key_synth(frequency_hz: f64, gate: Sbool, clock: Sbool) -> Sf64 {
+    let noise = random_uniform();
     let lfo = lfo_01(
         const_(Waveform::Triangle),
         const_(0.5),
         gate.trigger(),
         const_(0.5),
     );
-    let sah = sample_and_hold(lfo.clone_ref(), clock);
+    let sah = butterworth_low_pass_filter(sample_and_hold(noise.clone_ref(), clock), const_(100.0));
     let waveform = Waveform::Saw;
+    let osc_freq = const_(frequency_hz);
     let osc = sum(vec![
-        oscillator(const_(waveform), const_(frequency_hz), const_(0.2)),
-        oscillator(const_(waveform), const_(frequency_hz / 2.0), const_(0.2)),
+        oscillator(const_(waveform), osc_freq.clone_ref(), const_(0.2)),
+        oscillator(const_(waveform), osc_freq * 0.5, const_(0.2)),
     ]);
     let filter_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.2), const_(0.2))
         .map(|x| 1000.0 * (2.0 * (x - 1.0)).exp());
@@ -30,11 +31,11 @@ fn make_key_synth(frequency_hz: f64, gate: Sbool) -> Sf64 {
     let filtered_osc = osc.clone_ref();
     let filtered_osc = chebyshev_low_pass_filter(
         filtered_osc,
-        weighted_sum_const_pair(0.4, filter_envelope, sah * 2000.0).clamp_nyquist(),
-        const_(5.0),
+        weighted_sum_const_pair(0.6, filter_envelope, (sah + lfo) * 2000.0).clamp_nyquist(),
+        const_(10.0),
     );
     // let filtered_osc = chebyshev_high_pass_filter(filtered_osc, const_(0.0), const_(0.1));
-    amplify(filtered_osc, amplify_envelope).force(lfo)
+    amplify(filtered_osc, amplify_envelope)
 }
 
 struct Note {
@@ -87,9 +88,14 @@ impl AppData {
         .into_iter()
         .flatten()
         .collect();
+        let clock = clock(const_(8.0));
         let mut key_synths: Vec<Sf64> = Vec::new();
         for note in keyboard.values() {
-            key_synths.push(make_key_synth(note.frequency, note.gate.clone_ref().into()));
+            key_synths.push(make_key_synth(
+                note.frequency,
+                note.gate.clone_ref().into_buffered_signal(),
+                clock.clone_ref(),
+            ));
         }
         let keyboard_synth = sum(key_synths);
         let (mouse_x_signal, mouse_x_var) = var(0.0_f64);
@@ -102,7 +108,7 @@ impl AppData {
             ),
             mouse_y_signal * 10.0,
         )
-        .map(|x| (1.5 * x).clamp(-2.0, 2.0));
+        .map(|x| (1.0 * x).clamp(-3.0, 3.0));
         Ok(Self {
             mouse_coord: None,
             signal_player,
@@ -237,11 +243,9 @@ impl Component for GuiComponent {
                 *brightness != 0
             });
             state.signal_player.send_signal(&mut state.signal);
-            if state.frame_count % 1 == 0 {
-                state
-                    .signal_player
-                    .swap_recent_samples(&mut state.recent_samples);
-            }
+            state
+                .signal_player
+                .swap_recent_samples(&mut state.recent_samples);
             state.frame_count += 1;
         }
     }
