@@ -3,9 +3,9 @@ pub mod oscillator {
 
     pub struct Props {
         pub waveform: BufferedSignal<Waveform>,
-        pub frequency_hz: BufferedSignal<f64>,
-        pub reset_trigger: BufferedSignal<bool>,
-        pub square_wave_pulse_width_01: BufferedSignal<f64>,
+        pub frequency_hz: Sf64,
+        pub reset_trigger: Sbool,
+        pub square_wave_pulse_width_01: Sf64,
     }
 
     struct Signal {
@@ -45,21 +45,19 @@ pub mod oscillator {
         }
     }
 
-    impl From<Props> for BufferedSignal<f64> {
-        fn from(value: Props) -> Self {
-            BufferedSignal::new(Signal::new(value))
-        }
+    pub fn create(props: Props) -> Sf64 {
+        Sf64::new(Signal::new(props))
     }
 }
 
 pub mod sum {
     use crate::signal::*;
     pub struct Props {
-        signals: Vec<BufferedSignal<f64>>,
+        signals: Vec<Sf64>,
     }
 
     impl Props {
-        pub fn new(signals: Vec<BufferedSignal<f64>>) -> Self {
+        pub fn new(signals: Vec<Sf64>) -> Self {
             Self { signals }
         }
     }
@@ -73,10 +71,8 @@ pub mod sum {
         }
     }
 
-    impl From<Props> for BufferedSignal<f64> {
-        fn from(value: Props) -> Self {
-            BufferedSignal::new(value)
-        }
+    pub fn create(props: Props) -> Sf64 {
+        Sf64::new(props)
     }
 }
 
@@ -84,8 +80,8 @@ pub mod weighted_sum {
     use crate::signal::*;
 
     pub struct WeightedSignal {
-        pub weight: BufferedSignal<f64>,
-        pub signal: BufferedSignal<f64>,
+        pub weight: Sf64,
+        pub signal: Sf64,
     }
 
     pub struct Props {
@@ -117,10 +113,8 @@ pub mod weighted_sum {
         }
     }
 
-    impl From<Props> for BufferedSignal<f64> {
-        fn from(value: Props) -> Self {
-            BufferedSignal::new(value)
-        }
+    pub fn create(props: Props) -> Sf64 {
+        Sf64::new(props)
     }
 }
 
@@ -128,8 +122,8 @@ pub mod amplify {
     use crate::signal::*;
 
     pub struct Props {
-        pub signal: BufferedSignal<f64>,
-        pub by: BufferedSignal<f64>,
+        pub signal: Sf64,
+        pub by: Sf64,
     }
 
     const THRESHOLD: f64 = 1.0 / 64.0;
@@ -145,10 +139,8 @@ pub mod amplify {
         }
     }
 
-    impl From<Props> for BufferedSignal<f64> {
-        fn from(value: Props) -> Self {
-            BufferedSignal::new(value)
-        }
+    pub fn create(props: Props) -> Sf64 {
+        Sf64::new(props)
     }
 }
 
@@ -156,9 +148,9 @@ pub mod asr_envelope_lin_01 {
     use crate::signal::*;
 
     pub struct Props {
-        pub gate: BufferedSignal<bool>,
-        pub attack_seconds: BufferedSignal<f64>,
-        pub release_seconds: BufferedSignal<f64>,
+        pub gate: Sbool,
+        pub attack_seconds: Sf64,
+        pub release_seconds: Sf64,
     }
 
     struct Signal {
@@ -187,10 +179,8 @@ pub mod asr_envelope_lin_01 {
         }
     }
 
-    impl From<Props> for BufferedSignal<f64> {
-        fn from(value: Props) -> Self {
-            BufferedSignal::new(Signal::new(value))
-        }
+    pub fn create(props: Props) -> Sf64 {
+        Sf64::new(Signal::new(props))
     }
 }
 
@@ -198,11 +188,11 @@ pub mod adsr_envelope_exp_01 {
     use crate::signal::*;
 
     pub struct Props {
-        pub gate: BufferedSignal<bool>,
-        pub attack_seconds: BufferedSignal<f64>,
-        pub decay_seconds: BufferedSignal<f64>,
-        pub sustain_level_01: BufferedSignal<f64>,
-        pub release_seconds: BufferedSignal<f64>,
+        pub gate: Sbool,
+        pub attack_seconds: Sf64,
+        pub decay_seconds: Sf64,
+        pub sustain_level_01: Sf64,
+        pub release_seconds: Sf64,
     }
 
     struct Signal {
@@ -272,10 +262,8 @@ pub mod adsr_envelope_exp_01 {
         }
     }
 
-    impl From<Props> for BufferedSignal<f64> {
-        fn from(value: Props) -> Self {
-            BufferedSignal::new(Signal::new(value))
-        }
+    pub fn create(props: Props) -> Sf64 {
+        Sf64::new(Signal::new(props))
     }
 }
 
@@ -362,8 +350,8 @@ pub mod biquad_filter {
         use crate::signal::*;
 
         pub struct Props {
-            pub signal: BufferedSignal<f64>,
-            pub half_power_frequency_hz: BufferedSignal<f64>,
+            pub signal: Sf64,
+            pub half_power_frequency_hz: Sf64,
         }
 
         type Signal = SignalGen<Props>;
@@ -416,8 +404,8 @@ pub mod biquad_filter {
                 }
             }
 
-            pub fn create(props: Props, filter_order_half: usize) -> BufferedSignal<f64> {
-                BufferedSignal::new(Signal(SignalGen::new(props, filter_order_half)))
+            pub fn create(props: Props, filter_order_half: usize) -> Sf64 {
+                Sf64::new(Signal(SignalGen::new(props, filter_order_half)))
             }
         }
 
@@ -453,8 +441,8 @@ pub mod biquad_filter {
                 }
             }
 
-            pub fn create(props: Props, filter_order_half: usize) -> BufferedSignal<f64> {
-                BufferedSignal::new(Signal(SignalGen::new(props, filter_order_half)))
+            pub fn create(props: Props, filter_order_half: usize) -> Sf64 {
+                Sf64::new(Signal(SignalGen::new(props, filter_order_half)))
             }
         }
     }
@@ -466,9 +454,9 @@ pub mod biquad_filter {
         const EPSILON_MIN: f64 = 0.01;
 
         pub struct Props {
-            pub signal: BufferedSignal<f64>,
-            pub cutoff_hz: BufferedSignal<f64>,
-            pub epsilon: BufferedSignal<f64>,
+            pub signal: Sf64,
+            pub cutoff_hz: Sf64,
+            pub epsilon: Sf64,
         }
 
         type Signal = SignalGen<Props>;
@@ -530,8 +518,8 @@ pub mod biquad_filter {
                 }
             }
 
-            pub fn create(props: Props, filter_order_half: usize) -> BufferedSignal<f64> {
-                BufferedSignal::new(Signal(SignalGen::new(props, filter_order_half)))
+            pub fn create(props: Props, filter_order_half: usize) -> Sf64 {
+                Sf64::new(Signal(SignalGen::new(props, filter_order_half)))
             }
         }
 
@@ -574,8 +562,8 @@ pub mod biquad_filter {
                 }
             }
 
-            pub fn create(props: Props, filter_order_half: usize) -> BufferedSignal<f64> {
-                BufferedSignal::new(Signal(SignalGen::new(props, filter_order_half)))
+            pub fn create(props: Props, filter_order_half: usize) -> Sf64 {
+                Sf64::new(Signal(SignalGen::new(props, filter_order_half)))
             }
         }
     }

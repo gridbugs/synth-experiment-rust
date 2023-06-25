@@ -4,7 +4,7 @@ use rgb_int::Rgb24;
 use std::collections::{BTreeMap, HashMap};
 use synth_language::*;
 
-fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSignal<f64> {
+fn make_key_synth(frequency_hz: f64, gate: Sbool) -> Sf64 {
     let lfo = lfo_01(
         const_(Waveform::Saw),
         const_(frequency_hz / 200.),
@@ -78,7 +78,7 @@ impl AppData {
             'f' => Note::new(415.30), // G sharp
             'g' => Note::new(466.16), // A sharp
         };
-        let mut key_synths: Vec<BufferedSignal<f64>> = Vec::new();
+        let mut key_synths: Vec<Sf64> = Vec::new();
         for note in keyboard.values() {
             key_synths.push(make_key_synth(note.frequency, note.gate.clone_ref().into()));
         }

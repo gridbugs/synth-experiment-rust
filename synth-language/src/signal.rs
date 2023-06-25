@@ -20,6 +20,10 @@ pub struct BufferedSignal<T: Clone> {
     next_sample_index: u64,
 }
 
+pub type Sf64 = BufferedSignal<f64>;
+pub type Sf32 = BufferedSignal<f32>;
+pub type Sbool = BufferedSignal<bool>;
+
 impl<T: Clone + 'static> BufferedSignal<T> {
     pub fn new<S: SignalTrait<T> + 'static>(signal: S) -> Self {
         Self {
