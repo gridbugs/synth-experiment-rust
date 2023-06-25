@@ -64,6 +64,16 @@ impl<T: Clone + 'static> BufferedSignal<T> {
     pub fn both<U: Clone + 'static>(&self, other: &BufferedSignal<U>) -> BufferedSignal<(T, U)> {
         BufferedSignal::new(Both(self.clone_ref(), other.clone_ref()))
     }
+
+    pub fn map_sample_rate<U: Clone + 'static, F: FnMut(T, f64) -> U + 'static>(
+        &self,
+        f: F,
+    ) -> BufferedSignal<U> {
+        BufferedSignal::new(MapSampleRate {
+            buffered_signal: self.clone_ref(),
+            f,
+        })
+    }
 }
 
 impl BufferedSignal<bool> {
@@ -72,6 +82,12 @@ impl BufferedSignal<bool> {
             signal: self.clone_ref(),
             prev_sample: false,
         })
+    }
+}
+
+impl BufferedSignal<f64> {
+    pub fn div_nyquist(self) -> Self {
+        self.map_sample_rate(|x, sample_rate| x / (sample_rate / 2.0))
     }
 }
 
@@ -131,7 +147,6 @@ struct Map<T: Clone, F> {
     buffered_signal: BufferedSignal<T>,
     f: F,
 }
-
 impl<T: Clone + 'static, U, F: FnMut(T) -> U> SignalTrait<U> for Map<T, F> {
     fn sample(&mut self, ctx: &SignalCtx) -> U {
         (self.f)(self.buffered_signal.sample(ctx))
@@ -142,6 +157,16 @@ struct Both<T: Clone, U: Clone>(BufferedSignal<T>, BufferedSignal<U>);
 impl<T: Clone + 'static, U: Clone + 'static> SignalTrait<(T, U)> for Both<T, U> {
     fn sample(&mut self, ctx: &SignalCtx) -> (T, U) {
         (self.0.sample(ctx), self.1.sample(ctx))
+    }
+}
+
+struct MapSampleRate<T: Clone, F> {
+    buffered_signal: BufferedSignal<T>,
+    f: F,
+}
+impl<T: Clone + 'static, U, F: FnMut(T, f64) -> U> SignalTrait<U> for MapSampleRate<T, F> {
+    fn sample(&mut self, ctx: &SignalCtx) -> U {
+        (self.f)(self.buffered_signal.sample(ctx), ctx.sample_rate as f64)
     }
 }
 

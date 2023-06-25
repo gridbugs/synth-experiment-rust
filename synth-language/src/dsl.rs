@@ -1,9 +1,9 @@
 use crate::{
     signal::{BufferedSignal, Const, Var},
     synth_modules::{
-        adsr_envelope_exp_01, amplify, chebyshev_high_pass_filter, chebyshev_low_pass_filter,
-        moving_average_high_pass_filter, moving_average_low_pass_filter, oscillator,
-        state_variable_filter_first_order, sum, weighted_sum,
+        adsr_envelope_exp_01, amplify, asr_envelope_lin_01, chebyshev_high_pass_filter,
+        chebyshev_low_pass_filter, moving_average_high_pass_filter, moving_average_low_pass_filter,
+        oscillator, state_variable_filter_first_order, sum, weighted_sum,
     },
     Waveform,
 };
@@ -116,6 +116,19 @@ pub fn amplify(signal: BufferedSignal<f64>, by: BufferedSignal<f64>) -> Buffered
     amplify::Props { signal, by }.into()
 }
 
+pub fn asr_envelope_lin_01(
+    gate: BufferedSignal<bool>,
+    attack_seconds: BufferedSignal<f64>,
+    release_seconds: BufferedSignal<f64>,
+) -> BufferedSignal<f64> {
+    asr_envelope_lin_01::Props {
+        gate,
+        attack_seconds,
+        release_seconds,
+    }
+    .into()
+}
+
 pub fn adsr_envelope_exp_01(
     gate: BufferedSignal<bool>,
     attack_seconds: BufferedSignal<f64>,
@@ -160,6 +173,7 @@ pub fn state_variable_filter_first_order(
     .into()
 }
 
+/// expects cutoff as a ratio of the nyquist frequency
 pub fn chebyshev_low_pass_filter(
     signal: BufferedSignal<f64>,
     cutoff_01: BufferedSignal<f64>,
@@ -174,6 +188,7 @@ pub fn chebyshev_low_pass_filter(
     .into()
 }
 
+/// expects cutoff as a ratio of the nyquist frequency
 pub fn chebyshev_high_pass_filter(
     signal: BufferedSignal<f64>,
     cutoff_01: BufferedSignal<f64>,

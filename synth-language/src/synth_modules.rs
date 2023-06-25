@@ -152,6 +152,48 @@ pub mod amplify {
     }
 }
 
+pub mod asr_envelope_lin_01 {
+    use crate::signal::*;
+
+    pub struct Props {
+        pub gate: BufferedSignal<bool>,
+        pub attack_seconds: BufferedSignal<f64>,
+        pub release_seconds: BufferedSignal<f64>,
+    }
+
+    struct Signal {
+        props: Props,
+        current_value: f64,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            Self {
+                props,
+                current_value: 0.0,
+            }
+        }
+    }
+
+    impl SignalTrait<f64> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+            let delta = if self.props.gate.sample(ctx) {
+                1.0 / (self.props.attack_seconds.sample(ctx) * ctx.sample_rate as f64)
+            } else {
+                -1.0 / (self.props.release_seconds.sample(ctx) * ctx.sample_rate as f64)
+            };
+            self.current_value = (self.current_value + delta).clamp(0.0, 1.0);
+            self.current_value
+        }
+    }
+
+    impl From<Props> for BufferedSignal<f64> {
+        fn from(value: Props) -> Self {
+            BufferedSignal::new(Signal::new(value))
+        }
+    }
+}
+
 pub mod adsr_envelope_exp_01 {
     use crate::signal::*;
 
@@ -407,7 +449,7 @@ pub mod chebyshev_low_pass_filter {
         pub num_chained_filters: usize,
     }
 
-    #[derive(Default)]
+    #[derive(Default, Debug)]
     struct BufferEntry {
         a: f64,
         d1: f64,
@@ -417,6 +459,7 @@ pub mod chebyshev_low_pass_filter {
         w2: f64,
     }
 
+    #[derive(Debug)]
     struct Buffer {
         entries: Vec<BufferEntry>,
     }

@@ -17,25 +17,14 @@ fn make_key_synth(frequency_hz: f64, gate: BufferedSignal<bool>) -> BufferedSign
         const_(frequency_hz / 8.0), // + (lfo.clone_ref() * 4.0),
         const_(0.2),
     )]);
-    let filter_envelope = adsr_envelope_exp_01(
-        gate.clone_ref(),
-        const_(4.0),
-        const_(1.0),
-        const_(1.0),
-        const_(1.0),
-    );
-    let amplify_envelope = adsr_envelope_exp_01(
-        gate.clone_ref(),
-        const_(0.1),
-        const_(0.0),
-        const_(1.0),
-        const_(1.0),
-    );
+    let filter_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.2), const_(0.2))
+        .map(|x| 2000.0 * (2.0 * (x - 1.0)).exp());
+    let amplify_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.1), const_(0.2));
     let filtered_osc = osc.clone_ref();
     let filtered_osc = chebyshev_low_pass_filter(
         filtered_osc,
         state_variable_filter_first_order(
-            weighted_sum_const_pair(0.01, filter_envelope.clone_ref(), lfo * (1.0))
+            weighted_sum_const_pair(1.0, filter_envelope.div_nyquist(), lfo * (1.0))
                 .map(|x| x.clamp(0.0, 1.0)),
             const_(0.001),
             const_(1.0),
