@@ -3,6 +3,7 @@ use crate::music::NoteName;
 pub struct Args {
     pub start_note: NoteName,
     pub start_octave: usize,
+    pub volume_scale: f64,
 }
 
 impl Args {
@@ -15,10 +16,13 @@ impl Args {
                 start_octave = opt_opt::<usize, _>("INT", "start-octave")
                     .name('o')
                     .with_default(2);
+                volume_scale = opt_opt::<f64, _>("FLOAT", "volume")
+                    .with_default(1.0);
             } in {
                 Self {
                     start_note,
                     start_octave,
+                    volume_scale,
                 }
             }
         }
