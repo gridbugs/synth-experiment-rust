@@ -1,0 +1,17 @@
+[package]
+name = "synth-web"
+version = "0.1.0"
+authors = ["Stephen Sherratt <stephen@sherra.tt>"]
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+chargrid_web = { path = "/Users/s/src/chargrid/web" }
+synth_app = { path = "../app" , features = ["web"] }
+console_error_panic_hook = "0.1"
+wasm-logger = "0.2"
+log = "0.4"
+wasm-bindgen = "0.2"
+web-sys = "0.3"

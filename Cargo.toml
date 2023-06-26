@@ -2,8 +2,11 @@
 
 members = [
     "cpal-sample-player",
-    "synth-language",
-    "synth-app",
-    "synth-sdl2",
-    "synth-wgpu",
+    "language",
+    "app",
+    "sdl2",
+    "web",
 ]
+
+[profile.release]
+lto = true

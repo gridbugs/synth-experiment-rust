@@ -1,5 +1,5 @@
 use cpal::{
-    traits::{DeviceTrait, HostTrait},
+    traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, OutputCallbackInfo, SizedSample, Stream, StreamConfig,
 };
 use std::sync::{mpsc, Arc, RwLock};
@@ -38,10 +38,12 @@ pub struct SamplePlayer<T> {
     sink_cursor: Arc<RwLock<u64>>,
     buffer_padding: u64,
     source_cursor: u64,
+    downsample: u32,
 }
 
 impl<T: SizedSample + Send + 'static> SamplePlayer<T> {
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new(downsample: u32) -> anyhow::Result<Self> {
+        assert!(downsample > 0, "downsample must be positive");
         let (sender, receiver) = mpsc::channel::<T>();
         let sink_cursor = Arc::new(RwLock::new(0));
         let sink_cursor_for_cpal_thread = Arc::clone(&sink_cursor);
@@ -51,7 +53,7 @@ impl<T: SizedSample + Send + 'static> SamplePlayer<T> {
             &core.config,
             move |data: &mut [T], _: &OutputCallbackInfo| {
                 let mut sink_cursor = sink_cursor_for_cpal_thread.write().unwrap();
-                for output in data.chunks_mut(channels as usize) {
+                for output in data.chunks_mut(channels as usize * downsample as usize) {
                     if let Ok(input) = receiver.try_recv() {
                         for element in output {
                             *element = input;
@@ -65,6 +67,7 @@ impl<T: SizedSample + Send + 'static> SamplePlayer<T> {
             |err| log::error!("stream error: {}", err),
             None,
         )?;
+        stream.play()?;
         let buffer_padding = core.config.sample_rate.0 as u64 / 20;
         Ok(Self {
             core,
@@ -73,11 +76,12 @@ impl<T: SizedSample + Send + 'static> SamplePlayer<T> {
             sender,
             sink_cursor,
             source_cursor: 0,
+            downsample,
         })
     }
 
     pub fn sample_rate(&self) -> u32 {
-        self.core.config.sample_rate.0
+        self.core.config.sample_rate.0 / self.downsample
     }
 
     /// The target amount to over-fill the buffer to prevent gaps in the sample stream presented to

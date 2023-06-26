@@ -3,12 +3,16 @@ name = "synth_app"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+web = ["synth_language/web", "cpal_sample_player/web"]
+
 [dependencies]
 anyhow = "1.0"
 chargrid = { path = "/Users/s/src/chargrid/chargrid" }
 cpal_sample_player = { path = "../cpal-sample-player" }
 hound = "3.5"
 line_2d = "0.5"
+log = "0.4"
 meap = "0.8"
 rgb_int = "0.1"
-synth_language = { path = "../synth-language" }
+synth_language = { path = "../language" }

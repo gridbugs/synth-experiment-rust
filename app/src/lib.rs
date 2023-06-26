@@ -135,7 +135,7 @@ fn make_notes_even_temp(base_freq: f64, keys: &[char]) -> Vec<(char, NoteKey)> {
 
 impl AppData {
     fn new(args: Args) -> anyhow::Result<Self> {
-        let signal_player = SignalPlayer::new()?;
+        let signal_player = SignalPlayer::new(args.downsample)?;
         let start_frequency = args.start_note.frequency();
         let keyboard: BTreeMap<char, NoteKey> = vec![make_notes_even_temp(
             start_frequency,
@@ -162,7 +162,7 @@ impl AppData {
         let filtered_synth = chebyshev_low_pass_filter(
             keyboard_synth.clone_ref(),
             butterworth_low_pass_filter(
-                mouse_x_signal.map(|x| 5000.0 * (5.0 * (x - 1.0)).exp()),
+                mouse_x_signal.map(|x| 5000.0 * (4.0 * (x - 1.0)).exp()),
                 const_(10.0),
             ),
             mouse_y_signal * 10.0,
@@ -188,11 +188,15 @@ struct GuiComponent;
 fn coord_to_rgba32(coord: Coord, size: Size) -> Rgba32 {
     let x = coord.x as u32;
     let y = coord.y as u32;
-    let r = 255 - ((x * 255) / size.width());
+    let r = 255_u32.saturating_sub(((x * 255) / size.width()));
     let g = (x * 510) / size.width();
-    let g = if g > 255 { 510 - g } else { g };
+    let g = if g > 255 {
+        510_u32.saturating_sub(g)
+    } else {
+        g
+    };
     let b = (x * 255) / size.width();
-    let mul = 255 - ((y * 255) / size.height());
+    let mul = 255_u32.saturating_sub((y * 255) / size.height());
     Rgb24::new(r as u8, g as u8, b as u8).to_rgba32(mul as u8)
 }
 

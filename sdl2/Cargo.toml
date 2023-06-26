@@ -7,4 +7,4 @@ edition = "2021"
 anyhow = "1.0"
 chargrid_sdl2 = { path = "/Users/s/src/chargrid/sdl2" }
 env_logger = "0.10"
-synth_app = { path = "../synth-app" }
+synth_app = { path = "../app" }

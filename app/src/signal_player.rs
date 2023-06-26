@@ -9,9 +9,9 @@ pub struct SignalPlayer {
 }
 
 impl SignalPlayer {
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new(downsample: u32) -> anyhow::Result<Self> {
         Ok(Self {
-            sample_player: SamplePlayer::new()?,
+            sample_player: SamplePlayer::new(downsample)?,
             sample_index: 0,
             recent_samples: Default::default(),
         })

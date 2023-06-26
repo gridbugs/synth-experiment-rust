@@ -3,6 +3,10 @@ name = "synth_language"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+web = ["getrandom/js"]
+
 [dependencies]
+getrandom = "0.2"
 rand = "0.8"
 rand_xorshift = "0.3"
