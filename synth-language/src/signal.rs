@@ -14,27 +14,23 @@ pub trait SignalTrait<T> {
     fn sample(&mut self, ctx: &SignalCtx) -> T;
 }
 
-pub struct BufferedSignal<T: Clone> {
-    signal: Rc<RefCell<dyn SignalTrait<T>>>,
+struct BufferedSignalUnshared<T> {
+    signal: Box<dyn SignalTrait<T>>,
     buffered_sample: Option<T>,
     next_sample_index: u64,
 }
 
-pub type Sf64 = BufferedSignal<f64>;
-pub type Sf32 = BufferedSignal<f32>;
-pub type Sbool = BufferedSignal<bool>;
-
-impl<T: Clone + 'static> BufferedSignal<T> {
+impl<T: Clone> BufferedSignalUnshared<T> {
     pub fn new<S: SignalTrait<T> + 'static>(signal: S) -> Self {
         Self {
-            signal: Rc::new(RefCell::new(signal)),
+            signal: Box::new(signal),
             buffered_sample: None,
             next_sample_index: 0,
         }
     }
 
-    fn sample_signal(&self, ctx: &SignalCtx) -> T {
-        self.signal.borrow_mut().sample(ctx)
+    fn sample_signal(&mut self, ctx: &SignalCtx) -> T {
+        self.signal.sample(ctx)
     }
 
     pub fn sample(&mut self, ctx: &SignalCtx) -> T {
@@ -49,13 +45,25 @@ impl<T: Clone + 'static> BufferedSignal<T> {
             sample
         }
     }
+}
+
+pub struct BufferedSignal<T>(Rc<RefCell<BufferedSignalUnshared<T>>>);
+
+pub type Sf64 = BufferedSignal<f64>;
+pub type Sf32 = BufferedSignal<f32>;
+pub type Sbool = BufferedSignal<bool>;
+
+impl<T: Clone + 'static> BufferedSignal<T> {
+    pub fn new<S: SignalTrait<T> + 'static>(signal: S) -> Self {
+        Self(Rc::new(RefCell::new(BufferedSignalUnshared::new(signal))))
+    }
+
+    pub fn sample(&mut self, ctx: &SignalCtx) -> T {
+        self.0.borrow_mut().sample(ctx)
+    }
 
     pub fn clone_ref(&self) -> Self {
-        Self {
-            signal: Rc::clone(&self.signal),
-            buffered_sample: self.buffered_sample.clone(),
-            next_sample_index: self.next_sample_index,
-        }
+        Self(Rc::clone(&self.0))
     }
 
     pub fn map<U: Clone + 'static, F: FnMut(T) -> U + 'static>(&self, f: F) -> BufferedSignal<U> {

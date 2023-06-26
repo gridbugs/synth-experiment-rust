@@ -581,3 +581,70 @@ pub mod random_uniform {
         Sf64::new(Signal::new())
     }
 }
+
+pub mod synth_sequencer {
+    use crate::signal::*;
+
+    pub struct Step {
+        pub frequency_hz: Sf64,
+        pub period_seconds: Sf64,
+    }
+
+    pub struct Props {
+        pub sequence: Vec<Step>,
+        pub clock: Sbool,
+    }
+
+    struct Signal {
+        props: Props,
+        step_index: usize,
+        gate_remain_seconds: f64,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            // the sequence will start on the first clock pulse
+            Self {
+                gate_remain_seconds: 0.0,
+                step_index: props.sequence.len() - 1,
+                props,
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct OutputSample {
+        frequency_hz: f64,
+        gate: bool,
+    }
+
+    pub struct Output {
+        pub frequency_hz: Sf64,
+        pub gate: Sbool,
+    }
+
+    impl SignalTrait<OutputSample> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> OutputSample {
+            let current_step = if self.props.clock.sample(ctx) {
+                self.step_index = (self.step_index + 1) % self.props.sequence.len();
+                let current_step = &mut self.props.sequence[self.step_index];
+                self.gate_remain_seconds = current_step.period_seconds.sample(ctx);
+                current_step
+            } else {
+                &mut self.props.sequence[self.step_index]
+            };
+            self.gate_remain_seconds -= 1.0 / ctx.sample_rate as f64;
+            let gate = self.gate_remain_seconds >= 0.0;
+            let frequency_hz = current_step.frequency_hz.sample(ctx);
+            OutputSample { frequency_hz, gate }
+        }
+    }
+
+    pub fn create(props: Props) -> Output {
+        let combined_signal = BufferedSignal::new(Signal::new(props));
+        Output {
+            frequency_hz: combined_signal.map(|s| s.frequency_hz),
+            gate: combined_signal.map(|s| s.gate),
+        }
+    }
+}

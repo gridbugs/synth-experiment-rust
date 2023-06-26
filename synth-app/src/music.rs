@@ -100,3 +100,18 @@ impl FromStr for NoteName {
         anyhow::bail!("note a note: {}", s)
     }
 }
+
+pub struct Note {
+    pub name: NoteName,
+    pub octave: usize,
+}
+
+impl Note {
+    pub fn frequency(&self) -> f64 {
+        self.name.frequency_in_octave(self.octave)
+    }
+}
+
+pub fn note(name: NoteName, octave: usize) -> Note {
+    Note { name, octave }
+}

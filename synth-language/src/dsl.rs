@@ -2,7 +2,7 @@ use crate::{
     signal::{BufferedSignal, Const, Sbool, Sf64, Var},
     synth_modules::{
         amplify, asr_envelope_lin_01, biquad_filter, clock, oscillator, random_uniform,
-        sample_and_hold, sum, weighted_sum,
+        sample_and_hold, sum, synth_sequencer, weighted_sum,
     },
     Waveform,
 };
@@ -173,4 +173,10 @@ pub fn clock(frequency_hz: Sf64) -> Sbool {
 pub fn random_uniform() -> Sf64 {
     use random_uniform::*;
     create()
+}
+
+pub use synth_sequencer::{Output as SynthSequencerOutput, Step as SynthSequencerStep};
+pub fn synth_sequencer(sequence: Vec<SynthSequencerStep>, clock: Sbool) -> SynthSequencerOutput {
+    use synth_sequencer::*;
+    create(Props { sequence, clock })
 }

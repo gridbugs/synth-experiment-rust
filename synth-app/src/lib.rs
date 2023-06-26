@@ -1,3 +1,4 @@
+#![allow(unused)]
 use chargrid::{control_flow::*, core::*, prelude::*};
 use rgb_int::Rgb24;
 use std::collections::{BTreeMap, HashMap};
@@ -10,7 +11,7 @@ mod signal_player;
 use args::Args;
 use signal_player::SignalPlayer;
 
-fn make_key_synth(frequency_hz: f64, gate: Sbool, clock: Sbool) -> Sf64 {
+fn make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
     let noise = random_uniform();
     let lfo = lfo_01(
         const_(Waveform::Saw),
@@ -20,30 +21,88 @@ fn make_key_synth(frequency_hz: f64, gate: Sbool, clock: Sbool) -> Sf64 {
     );
     let sah = butterworth_low_pass_filter(sample_and_hold(noise.clone_ref(), clock), const_(100.0));
     let waveform = Waveform::Saw;
-    let osc_freq = const_(frequency_hz);
     let osc = sum(vec![
-        oscillator(const_(waveform), osc_freq.clone_ref(), const_(0.2)),
-        oscillator(const_(waveform), osc_freq * 0.5, const_(0.2)),
+        oscillator(const_(waveform), frequency_hz.clone_ref(), const_(0.2)),
+        oscillator(
+            const_(waveform),
+            frequency_hz.clone_ref() * 0.5,
+            const_(0.2),
+        ),
+        oscillator(
+            const_(waveform),
+            frequency_hz.clone_ref() * 1.5,
+            const_(0.2),
+        ),
     ]);
-    let filter_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.1), const_(0.2))
+    let filter_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.5), const_(0.2))
         .map(|x| 1000.0 * (2.0 * (x - 1.0)).exp());
     let amplify_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.1), const_(0.2));
     let filtered_osc = osc.clone_ref();
     let filtered_osc = chebyshev_low_pass_filter(
         filtered_osc,
-        weighted_sum_const_pair(0.6, filter_envelope, (sah + lfo) * 2000.0).clamp_nyquist(),
+        weighted_sum_const_pair(0.5, filter_envelope, (sah + lfo) * 2000.0).clamp_nyquist(),
         const_(10.0),
     );
-    let filtered_osc = chebyshev_high_pass_filter(filtered_osc, const_(500.0), const_(5.0));
+    let filtered_osc = chebyshev_high_pass_filter(filtered_osc, const_(200.0), const_(5.0));
     amplify(filtered_osc, amplify_envelope)
 }
 
-struct Note {
+fn make_sequencer(effect_clock: Sbool) -> Sf64 {
+    use music::{note, NoteName::*};
+    let sequencer_clock = clock(const_(4.0));
+    let octave_base = 3;
+    let note_sequence = vec![
+        (E, 0),
+        (DSharp, 0),
+        (E, 0),
+        (FSharp, 0),
+        (E, 0),
+        (DSharp, 0),
+        (E, 0),
+        (FSharp, 0),
+        (E, 0),
+        (DSharp, 0),
+        (E, 0),
+        (FSharp, 0),
+        (E, 0),
+        (DSharp, 0),
+        (E, 0),
+        (FSharp, 0),
+        (G, 0),
+        (FSharp, 0),
+        (G, 0),
+        (A, 0),
+        (B, 0),
+        (A, 0),
+        (G, 0),
+        (FSharp, 0),
+        (G, 0),
+        (FSharp, 0),
+        (E, 0),
+        (FSharp, 0),
+        (E, 0),
+        (DSharp, 0),
+        (CSharp, 0),
+        (DSharp, 0),
+    ];
+    let note_period_seconds = 0.2;
+    let sequence = note_sequence
+        .iter()
+        .map(|&(note_name, octave_offset)| SynthSequencerStep {
+            frequency_hz: const_(note(note_name, octave_base + octave_offset).frequency()),
+            period_seconds: const_(note_period_seconds),
+        })
+        .collect();
+    let SynthSequencerOutput { frequency_hz, gate } = synth_sequencer(sequence, sequencer_clock);
+    make_key_synth(frequency_hz, gate, effect_clock)
+}
+
+struct NoteKey {
     frequency: f64,
     gate: Var<bool>,
 }
 
-impl Note {
+impl NoteKey {
     fn new(frequency: f64) -> Self {
         Self {
             frequency,
@@ -60,16 +119,16 @@ struct AppData {
     lit_coords: HashMap<Coord, u8>,
     signal: BufferedSignal<f32>,
     octave_range: u32,
-    keyboard: BTreeMap<char, Note>,
+    keyboard: BTreeMap<char, NoteKey>,
     frame_count: u64,
     recent_samples: Vec<f32>,
 }
 
-fn make_notes_even_temp(base_freq: f64, keys: &[char]) -> Vec<(char, Note)> {
+fn make_notes_even_temp(base_freq: f64, keys: &[char]) -> Vec<(char, NoteKey)> {
     let mut mappings = Vec::new();
     for (i, &ch) in keys.iter().enumerate() {
-        let freq = music::note_frequency_even_temperement(base_freq, i as f64);
-        mappings.push((ch, Note::new(freq)));
+        let freq = music::note_frequency_even_temperement(base_freq, i as f64 - 1.0);
+        mappings.push((ch, NoteKey::new(freq)));
     }
     mappings
 }
@@ -77,8 +136,8 @@ fn make_notes_even_temp(base_freq: f64, keys: &[char]) -> Vec<(char, Note)> {
 impl AppData {
     fn new(args: Args) -> anyhow::Result<Self> {
         let signal_player = SignalPlayer::new()?;
-        let start_frequency = args.start_note.frequency_in_octave(args.start_octave);
-        let keyboard: BTreeMap<char, Note> = vec![make_notes_even_temp(
+        let start_frequency = args.start_note.frequency();
+        let keyboard: BTreeMap<char, NoteKey> = vec![make_notes_even_temp(
             start_frequency,
             &[
                 'a', 'o', '.', 'e', 'p', 'u', 'i', 'f', 'd', 'g', 'h', 'c', 't', 'n', 'l', 's',
@@ -92,12 +151,12 @@ impl AppData {
         let mut key_synths: Vec<Sf64> = Vec::new();
         for note in keyboard.values() {
             key_synths.push(make_key_synth(
-                note.frequency,
+                const_(note.frequency),
                 note.gate.clone_ref().into_buffered_signal(),
                 clock.clone_ref(),
             ));
         }
-        let keyboard_synth = sum(key_synths);
+        let keyboard_synth = sum(key_synths); // + make_sequencer(clock);
         let (mouse_x_signal, mouse_x_var) = var(0.0_f64);
         let (mouse_y_signal, mouse_y_var) = var(0.0_f64);
         let filtered_synth = chebyshev_low_pass_filter(
@@ -108,7 +167,7 @@ impl AppData {
             ),
             mouse_y_signal * 10.0,
         )
-        .map(|x| (1.0 * x).clamp(-4.0, 4.0));
+        .map(|x| (1.0 * x).clamp(-100.0, 100.0));
         Ok(Self {
             mouse_coord: None,
             signal_player,
