@@ -354,7 +354,7 @@ pub mod biquad_filter {
 
             impl SignalTrait<f64> for Signal {
                 fn sample(&mut self, ctx: &SignalCtx) -> f64 {
-                    sample::<UpdateBuffer, LowPass>(&mut self.0, ctx)
+                    sample::<UpdateBuffer, HighPass>(&mut self.0, ctx)
                 }
             }
 
@@ -475,7 +475,7 @@ pub mod biquad_filter {
 
             impl SignalTrait<f64> for Signal {
                 fn sample(&mut self, ctx: &SignalCtx) -> f64 {
-                    sample::<UpdateBuffer, LowPass>(&mut self.0, ctx)
+                    sample::<UpdateBuffer, HighPass>(&mut self.0, ctx)
                 }
             }
 
@@ -511,7 +511,6 @@ pub mod sample_and_hold {
     impl SignalTrait<f64> for Signal {
         fn sample(&mut self, ctx: &SignalCtx) -> f64 {
             if self.props.trigger.sample(ctx) {
-                //println!("{}", ctx.sample_index);
                 self.last_sample = self.props.signal.sample(ctx);
             }
             self.last_sample
@@ -546,13 +545,6 @@ pub mod clock {
             self.state = (self.state
                 + (self.props.frequency_hz.sample(ctx) / ctx.sample_rate as f64))
                 .rem_euclid(1.0);
-            /*
-            println!(
-                "{} {} {}",
-                self.state,
-                ctx.sample_index / ctx.sample_rate as u64,
-                ctx.sample_rate
-            ); */
             self.state < 0.5
         }
     }
