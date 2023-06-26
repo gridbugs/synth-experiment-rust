@@ -8,7 +8,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-chargrid_web = { path = "/Users/s/src/chargrid/web" }
+chargrid_web = "0.5"
 synth_app = { path = "../app" , features = ["web"] }
 console_error_panic_hook = "0.1"
 wasm-logger = "0.2"

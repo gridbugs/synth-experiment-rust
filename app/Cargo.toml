@@ -8,7 +8,7 @@ web = ["synth_language/web", "cpal_sample_player/web"]
 
 [dependencies]
 anyhow = "1.0"
-chargrid = { path = "/Users/s/src/chargrid/chargrid" }
+chargrid = "0.11"
 cpal_sample_player = { path = "../cpal-sample-player" }
 hound = "3.5"
 line_2d = "0.5"
