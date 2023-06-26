@@ -8,6 +8,7 @@ fn run_synth() {
         volume_scale: 0.1,
         start_note: music::note(music::NoteName::C, 2),
         downsample: 2,
+        render_scale: 1.0,
     };
     context.run(synth_app::app(args).unwrap());
 }

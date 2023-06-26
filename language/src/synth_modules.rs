@@ -184,6 +184,66 @@ pub mod asr_envelope_lin_01 {
     }
 }
 
+pub mod adsr_envelope_lin_01 {
+    use crate::signal::*;
+
+    pub struct Props {
+        pub gate: Sbool,
+        pub attack_seconds: Sf64,
+        pub decay_seconds: Sf64,
+        pub sustain_01: Sf64,
+        pub release_seconds: Sf64,
+    }
+
+    struct Signal {
+        props: Props,
+        current_value: f64,
+        crossed_threshold: bool,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            Self {
+                props,
+                current_value: 0.0,
+                crossed_threshold: false,
+            }
+        }
+    }
+
+    impl SignalTrait<f64> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+            if self.props.gate.sample(ctx) {
+                if self.crossed_threshold {
+                    // decay and sustain
+                    self.current_value = (self.current_value
+                        - (1.0 / (self.props.decay_seconds.sample(ctx) * ctx.sample_rate as f64)))
+                        .max(self.props.sustain_01.sample(ctx));
+                } else {
+                    // attack
+                    self.current_value = (self.current_value
+                        + (1.0 / (self.props.attack_seconds.sample(ctx) * ctx.sample_rate as f64)))
+                        .min(1.0);
+                    if self.current_value == 1.0 {
+                        self.crossed_threshold = true;
+                    }
+                }
+            } else {
+                // release
+                self.crossed_threshold = false;
+                self.current_value = (self.current_value
+                    - (1.0 / (self.props.release_seconds.sample(ctx) * ctx.sample_rate as f64)))
+                    .max(0.0);
+            }
+            self.current_value
+        }
+    }
+
+    pub fn create(props: Props) -> Sf64 {
+        Sf64::new(Signal::new(props))
+    }
+}
+
 pub mod biquad_filter {
     // This is based on the filter designs at:
     // https://exstrom.com/journal/sigproc/dsigproc.html

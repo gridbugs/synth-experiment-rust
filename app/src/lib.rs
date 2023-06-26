@@ -11,7 +11,7 @@ mod signal_player;
 use args::Args;
 use signal_player::SignalPlayer;
 
-fn make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
+fn _make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
     let noise = random_uniform();
     let lfo = lfo_01(
         const_(Waveform::Saw),
@@ -47,45 +47,64 @@ fn make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
     amplify(filtered_osc, amplify_envelope)
 }
 
+fn make_key_synth(frequency_hz: Sf64, gate: Sbool, effect_clock: Sbool) -> Sf64 {
+    let noise = random_uniform();
+    let lfo = lfo_01(
+        const_(Waveform::Sine),
+        const_(0.5),
+        const_(false),
+        const_(0.5),
+    );
+    let sah = butterworth_low_pass_filter(
+        sample_and_hold(noise.clone_ref(), effect_clock.clone_ref()),
+        const_(100.0),
+    );
+    let waveform = const_(Waveform::Saw);
+    let pw = const_(0.2);
+    let osc = sum(vec![
+        oscillator(
+            waveform.clone_ref(),
+            frequency_hz.clone_ref(),
+            pw.clone_ref(),
+        ),
+        oscillator(
+            waveform.clone_ref(),
+            frequency_hz.clone_ref() * 2.0,
+            pw.clone_ref(),
+        ) * 0.5,
+    ]);
+    let env = adsr_envelope_lin_01(
+        gate.clone_ref(),
+        const_(0.01),
+        const_(0.08),
+        const_(0.7),
+        const_(1.0),
+    )
+    .exp01(2.0);
+    let smooth_env = butterworth_low_pass_filter(env.clone_ref(), const_(100.0));
+    let lpf_osc = chebyshev_low_pass_filter(
+        osc,
+        (smooth_env * 1000.0 + 200.0 + (sah * 200.0)).map(|x| x.max(0.0)),
+        const_(10.0),
+    );
+    amplify(lpf_osc, env)
+}
+
 fn make_sequencer(effect_clock: Sbool) -> Sf64 {
     use music::{note, NoteName::*};
-    let sequencer_clock = clock(const_(4.0));
-    let octave_base = 3;
+    let sequencer_clock = clock(const_(4.4));
+    let octave_base = 1;
     let note_sequence = vec![
-        (E, 0),
-        (DSharp, 0),
-        (E, 0),
-        (FSharp, 0),
-        (E, 0),
-        (DSharp, 0),
-        (E, 0),
-        (FSharp, 0),
-        (E, 0),
-        (DSharp, 0),
-        (E, 0),
-        (FSharp, 0),
-        (E, 0),
-        (DSharp, 0),
-        (E, 0),
-        (FSharp, 0),
+        (C, 0),
+        (C, 0),
+        (C, 0),
+        (C, 0),
+        (C, 0),
+        (C, 1),
         (G, 0),
-        (FSharp, 0),
-        (G, 0),
-        (A, 0),
-        (B, 0),
-        (A, 0),
-        (G, 0),
-        (FSharp, 0),
-        (G, 0),
-        (FSharp, 0),
-        (E, 0),
-        (FSharp, 0),
-        (E, 0),
-        (DSharp, 0),
-        (CSharp, 0),
-        (DSharp, 0),
+        (C, 1),
     ];
-    let note_period_seconds = 0.2;
+    let note_period_seconds = 0.1;
     let sequence = note_sequence
         .iter()
         .map(|&(note_name, octave_offset)| SynthSequencerStep {
@@ -112,6 +131,7 @@ impl NoteKey {
 }
 
 struct AppData {
+    args: Args,
     mouse_coord: Option<Coord>,
     mouse_x_var: Var<f64>,
     mouse_y_var: Var<f64>,
@@ -147,27 +167,26 @@ impl AppData {
         .into_iter()
         .flatten()
         .collect();
-        let clock = clock(const_(8.0));
+        let effect_clock = clock(const_(8.0));
         let mut key_synths: Vec<Sf64> = Vec::new();
         for note in keyboard.values() {
             key_synths.push(make_key_synth(
                 const_(note.frequency),
                 note.gate.clone_ref().into_buffered_signal(),
-                clock.clone_ref(),
+                effect_clock.clone_ref(),
             ));
         }
-        let keyboard_synth = sum(key_synths); // + make_sequencer(clock);
+        let keyboard_synth = sum(key_synths) + make_sequencer(const_(false));
         let (mouse_x_signal, mouse_x_var) = var(0.0_f64);
         let (mouse_y_signal, mouse_y_var) = var(0.0_f64);
         let filtered_synth = chebyshev_low_pass_filter(
             keyboard_synth.clone_ref(),
             butterworth_low_pass_filter(
                 mouse_x_signal.map(|x| 5000.0 * (4.0 * (x - 1.0)).exp()),
-                const_(10.0),
+                const_(5.0),
             ),
             mouse_y_signal * 10.0,
-        )
-        .map(|x| (1.0 * x).clamp(-100.0, 100.0));
+        );
         Ok(Self {
             mouse_coord: None,
             signal_player,
@@ -179,6 +198,7 @@ impl AppData {
             mouse_y_var,
             frame_count: 0,
             recent_samples: Vec::new(),
+            args,
         })
     }
 }
@@ -222,11 +242,12 @@ impl Component for GuiComponent {
             let width = size.width() as usize;
             let height = size.height();
             let step = state.recent_samples.len() / width;
-            let scale = 1.0 / 4.0;
             let mut prev = Coord::new(0, 0);
             for x in 0..width {
-                let sample = state.recent_samples[x * step];
-                let top = ((height as f32 / 2.0) + (scale * sample * (height as f32 / 2.0))) as u32;
+                let sample = state.recent_samples[x * step] / state.args.volume_scale as f32;
+                let top = ((height as f32 / 2.0)
+                    + (state.args.render_scale as f32 * sample * (height as f32 / 2.0)))
+                    as u32;
                 let coord = Coord::new(x as i32, top as i32);
                 if x > 0 {
                     for coord in line_2d::coords_between(prev, coord) {

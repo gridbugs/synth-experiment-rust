@@ -111,6 +111,12 @@ impl Sf64 {
             x.clamp(-nyquist, nyquist)
         })
     }
+    pub fn exp01(&self, k: f64) -> Sf64 {
+        BufferedSignal::new(Exp01Signal {
+            signal: self.clone_ref(),
+            exp01: Exp01::new(k),
+        })
+    }
 }
 
 pub struct Const<T: Clone>(T);
@@ -213,6 +219,49 @@ impl<T: Clone + 'static, U: Clone + 'static> SignalTrait<T> for Force<T, U> {
     }
 }
 
+// The function f(x) = exp(k * (x - a)) - b
+// ...where a and b are chosen so that f(0) = 0 and f(1) = 1.
+// The k parameter controls how sharp the curve is.
+// It approaches a linear function as k approaches 0.
+// k = 0 is special cased as a linear function for convenience.
+struct Exp01 {
+    k: f64,
+    a: f64,
+    b: f64,
+}
+impl Exp01 {
+    fn new(k: f64) -> Self {
+        if k == 0.0 {
+            Self {
+                k: 0.0,
+                a: 0.0,
+                b: 0.0,
+            }
+        } else {
+            let b = 1.0 / (k.exp() - 1.0);
+            let a = -b.ln() / k;
+            Self { k, a, b }
+        }
+    }
+
+    fn get(&self, x: f64) -> f64 {
+        if self.k == 0.0 {
+            x
+        } else {
+            (self.k * (x - self.a)).exp() - self.b
+        }
+    }
+}
+struct Exp01Signal {
+    signal: Sf64,
+    exp01: Exp01,
+}
+impl SignalTrait<f64> for Exp01Signal {
+    fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+        self.exp01.get(self.signal.sample(ctx))
+    }
+}
+
 impl<T> Add for BufferedSignal<T>
 where
     T: Add + Clone + 'static,
@@ -254,49 +303,5 @@ where
     type Output = BufferedSignal<<T as Mul>::Output>;
     fn mul(self, rhs: T) -> Self::Output {
         self.map(move |lhs| lhs * rhs)
-    }
-}
-
-impl<T> Add for &BufferedSignal<T>
-where
-    T: Add + Clone + 'static,
-    <T as Add>::Output: Clone,
-{
-    type Output = BufferedSignal<<T as Add>::Output>;
-    fn add(self, rhs: Self) -> Self::Output {
-        self.clone_ref() + rhs.clone_ref()
-    }
-}
-
-impl<T> Add<T> for &BufferedSignal<T>
-where
-    T: Add + Copy + 'static,
-    <T as Add>::Output: Clone,
-{
-    type Output = BufferedSignal<<T as Add>::Output>;
-    fn add(self, rhs: T) -> Self::Output {
-        self.clone_ref() + rhs
-    }
-}
-
-impl<T> Mul for &BufferedSignal<T>
-where
-    T: Mul + Clone + 'static,
-    <T as Mul>::Output: Clone,
-{
-    type Output = BufferedSignal<<T as Mul>::Output>;
-    fn mul(self, rhs: Self) -> Self::Output {
-        self.clone_ref() * rhs.clone_ref()
-    }
-}
-
-impl<T> Mul<T> for &BufferedSignal<T>
-where
-    T: Mul + Copy + 'static,
-    <T as Mul>::Output: Clone,
-{
-    type Output = BufferedSignal<<T as Mul>::Output>;
-    fn mul(self, rhs: T) -> Self::Output {
-        self.clone_ref() * rhs
     }
 }

@@ -4,6 +4,7 @@ pub struct Args {
     pub start_note: Note,
     pub volume_scale: f64,
     pub downsample: u32,
+    pub render_scale: f64,
 }
 
 impl Args {
@@ -21,6 +22,8 @@ impl Args {
                     .with_default(1.0);
                 downsample = opt_opt::<u32, _>("INT", "downsample")
                     .with_default(1);
+                render_scale = opt_opt::<f64, _>("FLOAT", "render-scale")
+                    .with_default(1.0);
             } in {
                 Self {
                     start_note: Note {
@@ -29,6 +32,7 @@ impl Args {
                     },
                     volume_scale,
                     downsample,
+                    render_scale,
                 }
             }
         }
