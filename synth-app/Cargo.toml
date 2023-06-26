@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
-chargrid = { git = "https://github.com/gridbugs/chargrid", rev = "5570cb5547f3fcdd3db18c2f7756895cfd78304d" }
+chargrid = { path = "/Users/s/src/chargrid/chargrid" }
 cpal_sample_player = { path = "../cpal-sample-player" }
 hound = "3.5"
 line_2d = "0.5"

@@ -5,4 +5,5 @@ members = [
     "synth-language",
     "synth-app",
     "synth-sdl2",
+    "synth-wgpu",
 ]

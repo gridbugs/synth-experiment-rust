@@ -1,10 +1,10 @@
 [package]
-name = "synth-sdl2"
+name = "synth-wgpu"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
-chargrid_sdl2 = { path = "/Users/s/src/chargrid/sdl2" }
+chargrid_wgpu = { path = "/Users/s/src/chargrid/wgpu" }
 env_logger = "0.10"
 synth_app = { path = "../synth-app" }
