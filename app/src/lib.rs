@@ -14,44 +14,40 @@ use signal_player::SignalPlayer;
 fn make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
     let noise = random_uniform();
     let lfo = lfo_01(
-        const_(Waveform::Saw),
+        const_(Waveform::Sine),
         const_(0.5),
         gate.trigger(),
+        const_(0.25),
         const_(0.5),
     );
     let sah = butterworth_low_pass_filter(sample_and_hold(noise.clone_ref(), clock), const_(100.0));
-    let waveform = Waveform::Square;
-    let osc = sum(vec![
-        oscillator(const_(waveform), frequency_hz.clone_ref(), const_(0.2)),
-        oscillator(
-            const_(waveform),
-            frequency_hz.clone_ref() * 0.5,
-            const_(0.2),
-        ),
-        oscillator(
-            const_(waveform),
-            frequency_hz.clone_ref() * 1.5,
-            const_(0.2),
-        ),
-    ]);
-    let filter_envelope = adsr_envelope_lin_01(
-        gate.clone_ref(),
-        const_(1.0),
-        const_(2.0),
+    let waveform = Waveform::Saw;
+    let osc = sum(vec![oscillator(
+        const_(waveform),
+        frequency_hz.clone_ref() * 0.5,
         const_(0.2),
-        const_(0.2),
-    )
-    .exp01(0.5)
-        * 1000.0;
-    let amplify_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.1), const_(2.0));
-    let filtered_osc = osc.clone_ref();
-    let filtered_osc = chebyshev_low_pass_filter(
-        filtered_osc,
-        weighted_sum_const_pair(0.5, filter_envelope, (sah + lfo) * 1000.0).clamp_nyquist(),
-        const_(1.0),
+    )]);
+    let release = const_(2.0);
+    let env = butterworth_low_pass_filter(
+        adsr_envelope_lin_01(
+            gate.clone_ref(),
+            const_(0.05),
+            const_(0.5),
+            const_(1.0),
+            release.clone_ref(),
+        )
+        .exp01(2.0),
+        const_(5.0),
     );
-    let filtered_osc = chebyshev_high_pass_filter(filtered_osc, const_(200.0), const_(5.0));
-    amplify(filtered_osc, amplify_envelope)
+    let filtered_osc = chebyshev_low_pass_filter(
+        osc,
+        env.clone_ref() * 500.0 + 100.0 + lfo * 1000.0,
+        const_(10.0),
+    );
+    amplify(
+        filtered_osc,
+        asr_envelope_lin_01(gate, const_(0.01), release),
+    )
 }
 
 fn make_sequencer(effect_clock: Sbool) -> Sf64 {
@@ -156,7 +152,7 @@ impl AppData {
             mouse_coord: None,
             signal_player,
             lit_coords: HashMap::new(),
-            signal: filtered_synth.map(move |s| (s * args.volume_scale) as f32),
+            signal: keyboard_synth.map(move |s| (s * args.volume_scale) as f32),
             octave_range: 24,
             keyboard,
             mouse_x_var,

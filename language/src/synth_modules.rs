@@ -5,30 +5,34 @@ pub mod oscillator {
         pub waveform: BufferedSignal<Waveform>,
         pub frequency_hz: Sf64,
         pub reset_trigger: Sbool,
+        pub reset_offset_01: Sf64,
         pub square_wave_pulse_width_01: Sf64,
     }
 
     struct Signal {
         props: Props,
-        state: f64,
+        state: Option<f64>,
     }
 
     impl Signal {
         fn new(props: Props) -> Self {
-            Self { props, state: 0.0 }
+            Self { props, state: None }
         }
     }
 
     impl SignalTrait<f64> for Signal {
         fn sample(&mut self, ctx: &SignalCtx) -> f64 {
+            if self.state.is_none() {
+                self.state = Some(self.props.reset_offset_01.sample(ctx));
+            }
+            let state = self.state.as_mut().unwrap();
             if self.props.reset_trigger.sample(ctx) {
-                self.state = 0f64.into();
+                *state = self.props.reset_offset_01.sample(ctx);
             } else {
-                self.state = (self.state
-                    + (self.props.frequency_hz.sample(ctx) / ctx.sample_rate as f64))
+                *state = (*state + (self.props.frequency_hz.sample(ctx) / ctx.sample_rate as f64))
                     .rem_euclid(1.0);
             }
-            let state: f64 = self.state.into();
+            let state = *state;
             let x = match self.props.waveform.sample(ctx) {
                 Waveform::Saw => (state * 2.0) - 1.0,
                 Waveform::Square => {

@@ -20,6 +20,7 @@ pub fn lfo(
     waveform: BufferedSignal<Waveform>,
     frequency_hz: Sf64,
     reset_trigger: Sbool,
+    reset_offset_01: Sf64,
     square_wave_pulse_width_01: Sf64,
 ) -> Sf64 {
     use oscillator::*;
@@ -27,6 +28,7 @@ pub fn lfo(
         frequency_hz,
         waveform,
         reset_trigger,
+        reset_offset_01,
         square_wave_pulse_width_01,
     })
 }
@@ -35,12 +37,14 @@ pub fn lfo_01(
     waveform: BufferedSignal<Waveform>,
     frequency_hz: Sf64,
     reset_trigger: Sbool,
+    reset_offset_01: Sf64,
     square_wave_pulse_width_01: Sf64,
 ) -> Sf64 {
     ((lfo(
         waveform,
         frequency_hz,
         reset_trigger,
+        reset_offset_01,
         square_wave_pulse_width_01,
     ) + 1.0)
         * 0.5)
@@ -57,6 +61,7 @@ pub fn oscillator(
         frequency_hz,
         waveform,
         reset_trigger: const_(false),
+        reset_offset_01: const_(0.0),
         square_wave_pulse_width_01,
     })
 }
