@@ -11,7 +11,7 @@ mod signal_player;
 use args::Args;
 use signal_player::SignalPlayer;
 
-fn _make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
+fn make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
     let noise = random_uniform();
     let lfo = lfo_01(
         const_(Waveform::Saw),
@@ -20,7 +20,7 @@ fn _make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
         const_(0.5),
     );
     let sah = butterworth_low_pass_filter(sample_and_hold(noise.clone_ref(), clock), const_(100.0));
-    let waveform = Waveform::Saw;
+    let waveform = Waveform::Square;
     let osc = sum(vec![
         oscillator(const_(waveform), frequency_hz.clone_ref(), const_(0.2)),
         oscillator(
@@ -34,66 +34,30 @@ fn _make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
             const_(0.2),
         ),
     ]);
-    let filter_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.5), const_(0.2))
-        .map(|x| 1000.0 * (2.0 * (x - 1.0)).exp());
-    let amplify_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.1), const_(0.2));
+    let filter_envelope = adsr_envelope_lin_01(
+        gate.clone_ref(),
+        const_(1.0),
+        const_(2.0),
+        const_(0.2),
+        const_(0.2),
+    )
+    .exp01(0.5)
+        * 1000.0;
+    let amplify_envelope = asr_envelope_lin_01(gate.clone_ref(), const_(0.1), const_(2.0));
     let filtered_osc = osc.clone_ref();
     let filtered_osc = chebyshev_low_pass_filter(
         filtered_osc,
-        weighted_sum_const_pair(0.5, filter_envelope, (sah + lfo) * 2000.0).clamp_nyquist(),
-        const_(10.0),
+        weighted_sum_const_pair(0.5, filter_envelope, (sah + lfo) * 1000.0).clamp_nyquist(),
+        const_(1.0),
     );
     let filtered_osc = chebyshev_high_pass_filter(filtered_osc, const_(200.0), const_(5.0));
     amplify(filtered_osc, amplify_envelope)
 }
 
-fn make_key_synth(frequency_hz: Sf64, gate: Sbool, effect_clock: Sbool) -> Sf64 {
-    let noise = random_uniform();
-    let lfo = lfo_01(
-        const_(Waveform::Sine),
-        const_(0.5),
-        const_(false),
-        const_(0.5),
-    );
-    let sah = butterworth_low_pass_filter(
-        sample_and_hold(noise.clone_ref(), effect_clock.clone_ref()),
-        const_(100.0),
-    );
-    let waveform = const_(Waveform::Saw);
-    let pw = const_(0.2);
-    let osc = sum(vec![
-        oscillator(
-            waveform.clone_ref(),
-            frequency_hz.clone_ref(),
-            pw.clone_ref(),
-        ),
-        oscillator(
-            waveform.clone_ref(),
-            frequency_hz.clone_ref() * 2.0,
-            pw.clone_ref(),
-        ) * 0.5,
-    ]);
-    let env = adsr_envelope_lin_01(
-        gate.clone_ref(),
-        const_(0.01),
-        const_(0.08),
-        const_(0.7),
-        const_(1.0),
-    )
-    .exp01(2.0);
-    let smooth_env = butterworth_low_pass_filter(env.clone_ref(), const_(100.0));
-    let lpf_osc = chebyshev_low_pass_filter(
-        osc,
-        (smooth_env * 1000.0 + 200.0 + (sah * 200.0)).map(|x| x.max(0.0)),
-        const_(10.0),
-    );
-    amplify(lpf_osc, env)
-}
-
 fn make_sequencer(effect_clock: Sbool) -> Sf64 {
     use music::{note, NoteName::*};
-    let sequencer_clock = clock(const_(4.4));
-    let octave_base = 1;
+    let sequencer_clock = clock(const_(3.0));
+    let octave_base = 2;
     let note_sequence = vec![
         (C, 0),
         (C, 0),
@@ -176,7 +140,7 @@ impl AppData {
                 effect_clock.clone_ref(),
             ));
         }
-        let keyboard_synth = sum(key_synths) + make_sequencer(const_(false));
+        let keyboard_synth = sum(key_synths); // + make_sequencer(effect_clock);
         let (mouse_x_signal, mouse_x_var) = var(0.0_f64);
         let (mouse_y_signal, mouse_y_var) = var(0.0_f64);
         let filtered_synth = chebyshev_low_pass_filter(
@@ -186,7 +150,8 @@ impl AppData {
                 const_(5.0),
             ),
             mouse_y_signal * 10.0,
-        );
+        )
+        .map(|x| (x * 0.5).clamp(-10.0, 10.0));
         Ok(Self {
             mouse_coord: None,
             signal_player,
