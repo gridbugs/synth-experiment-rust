@@ -11,4 +11,6 @@ pub enum Waveform {
 }
 
 pub use dsl::*;
-pub use signal::{BufferedSignal, Sbool, Sf32, Sf64, SignalCtx, SignalTrait, Var};
+pub use signal::{
+    BoolVar, BufferedSignal, Sbool, Sf32, Sf64, SignalCtx, SignalTrait, TriggerVar, Var,
+};

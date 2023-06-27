@@ -712,3 +712,84 @@ pub mod synth_sequencer {
         }
     }
 }
+
+pub mod trigger_sequencer_8 {
+    use crate::signal::*;
+
+    pub struct Props {
+        pub sequence: Vec<Su8>,
+        pub clock: Sbool,
+    }
+
+    struct Signal {
+        props: Props,
+        step_index: usize,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            // the sequence will start on the first clock pulse
+            Self {
+                step_index: props.sequence.len() - 1,
+                props,
+            }
+        }
+    }
+
+    impl SignalTrait<u8> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> u8 {
+            if self.props.clock.sample(ctx) {
+                self.step_index = (self.step_index + 1) % self.props.sequence.len();
+                self.props.sequence[self.step_index].sample(ctx)
+            } else {
+                0
+            }
+        }
+    }
+
+    pub fn create(props: Props) -> [Sbool; 8] {
+        Su8::new(Signal::new(props)).expand()
+    }
+}
+
+pub mod sample_player {
+    use crate::signal::*;
+
+    pub struct Props {
+        /// monophonic data at the same sample rate as the audio device
+        pub data: Vec<f32>,
+        pub trigger: Sbool,
+    }
+
+    struct Signal {
+        props: Props,
+        sample_index: usize,
+    }
+
+    impl Signal {
+        fn new(props: Props) -> Self {
+            Self {
+                sample_index: props.data.len(),
+                props,
+            }
+        }
+    }
+
+    impl SignalTrait<f32> for Signal {
+        fn sample(&mut self, ctx: &SignalCtx) -> f32 {
+            if self.props.trigger.sample(ctx) {
+                self.sample_index = 0;
+            }
+            if let Some(&sample) = self.props.data.get(self.sample_index) {
+                self.sample_index += 1;
+                sample
+            } else {
+                0.0
+            }
+        }
+    }
+
+    pub fn create(props: Props) -> Sf32 {
+        Sf32::new(Signal::new(props))
+    }
+}

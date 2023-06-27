@@ -13,6 +13,7 @@ cpal_sample_player = { path = "../cpal-sample-player" }
 hound = "3.5"
 line_2d = "0.5"
 log = "0.4"
+maplit = "1.0"
 meap = "0.8"
 rgb_int = "0.1"
 synth_language = { path = "../language" }

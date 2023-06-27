@@ -1,4 +1,3 @@
-#![allow(unused)]
 use chargrid::{control_flow::*, core::*, prelude::*};
 use rgb_int::Rgb24;
 use std::collections::{BTreeMap, HashMap};
@@ -6,6 +5,7 @@ use synth_language::*;
 
 pub mod args;
 pub mod music;
+mod samples;
 mod signal_player;
 
 use args::Args;
@@ -41,7 +41,7 @@ fn make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
     );
     let filtered_osc = chebyshev_low_pass_filter(
         osc,
-        env.clone_ref() * 500.0 + 100.0 + lfo * 1000.0,
+        env.clone_ref() * 500.0 + 100.0 + lfo * 1000.0 + sah * 500.0,
         const_(10.0),
     );
     amplify(
@@ -50,9 +50,8 @@ fn make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
     )
 }
 
-fn make_sequencer(effect_clock: Sbool) -> Sf64 {
+fn make_sequencer(sequencer_clock: Sbool, effect_clock: Sbool) -> Sf64 {
     use music::{note, NoteName::*};
-    let sequencer_clock = clock(const_(3.0));
     let octave_base = 2;
     let note_sequence = vec![
         (C, 0),
@@ -74,6 +73,32 @@ fn make_sequencer(effect_clock: Sbool) -> Sf64 {
         .collect();
     let SynthSequencerOutput { frequency_hz, gate } = synth_sequencer(sequence, sequencer_clock);
     make_key_synth(frequency_hz, gate, effect_clock)
+}
+
+fn make_drum_sequencer(sequencer_clock: Sbool) -> Sf64 {
+    const SNARE: u8 = 1 << 0;
+    const BASS: u8 = 1 << 1;
+    const SYMBOL: u8 = 1 << 2;
+    let sequence = vec![
+        SYMBOL | BASS,
+        SYMBOL,
+        SYMBOL | SNARE,
+        SYMBOL,
+        SYMBOL,
+        SYMBOL | BASS,
+        SYMBOL | SNARE | BASS,
+        SYMBOL,
+    ]
+    .into_iter()
+    .map(const_)
+    .collect();
+    let [snare_trigger, bass_trigger, symbol_trigger, ..] =
+        trigger_sequencer_8(sequence, sequencer_clock);
+    sum(vec![
+        sample_player(samples::sn01(), snare_trigger),
+        sample_player(samples::bd01(), bass_trigger),
+        sample_player(samples::ch01(), symbol_trigger),
+    ])
 }
 
 struct NoteKey {
@@ -99,7 +124,7 @@ struct AppData {
     lit_coords: HashMap<Coord, u8>,
     signal: BufferedSignal<f32>,
     octave_range: u32,
-    keyboard: BTreeMap<char, NoteKey>,
+    buttons: BTreeMap<char, BoolVar>,
     frame_count: u64,
     recent_samples: Vec<f32>,
 }
@@ -113,8 +138,15 @@ fn make_notes_even_temp(base_freq: f64, keys: &[char]) -> Vec<(char, NoteKey)> {
     mappings
 }
 
+fn sample_var(sample: Vec<f32>) -> (Sf64, TriggerVar) {
+    let (trigger, var) = trigger_var();
+    let player = sample_player(sample, trigger);
+    (player, var)
+}
+
 impl AppData {
     fn new(args: Args) -> anyhow::Result<Self> {
+        samples::sn01();
         let signal_player = SignalPlayer::new(args.downsample)?;
         let start_frequency = args.start_note.frequency();
         let keyboard: BTreeMap<char, NoteKey> = vec![make_notes_even_temp(
@@ -127,34 +159,53 @@ impl AppData {
         .into_iter()
         .flatten()
         .collect();
-        let effect_clock = clock(const_(8.0));
+        let effect_clock = clock(const_(6.0));
         let mut key_synths: Vec<Sf64> = Vec::new();
         for note in keyboard.values() {
             key_synths.push(make_key_synth(
                 const_(note.frequency),
-                note.gate.clone_ref().into_buffered_signal(),
+                note.gate.buffered_signal(),
                 effect_clock.clone_ref(),
             ));
         }
-        let keyboard_synth = sum(key_synths); // + make_sequencer(effect_clock);
+        let drum_machine = maplit::btreemap! {
+            ';' => sample_var(samples::sn01()),
+            'q' => sample_var(samples::bd01()),
+            'j' => sample_var(samples::ch01()),
+        };
         let (mouse_x_signal, mouse_x_var) = var(0.0_f64);
         let (mouse_y_signal, mouse_y_var) = var(0.0_f64);
+        let sequencer_clock = clock(const_(3.0));
+        let sequencers = make_sequencer(sequencer_clock.clone_ref(), const_(false))
+            + (make_drum_sequencer(sequencer_clock) * 8.0);
+        let keyboard_synth = sum(key_synths);
+        let drums = sum(drum_machine.values().map(|(s, _)| s.clone_ref()).collect());
+        let manual_synth = sum(vec![keyboard_synth, drums]);
+        let combined_synth = sum(vec![manual_synth, sequencers * 0.2]);
         let filtered_synth = chebyshev_low_pass_filter(
-            keyboard_synth.clone_ref(),
+            combined_synth.clone_ref(),
             butterworth_low_pass_filter(
                 mouse_x_signal.map(|x| 5000.0 * (4.0 * (x - 1.0)).exp()),
                 const_(5.0),
             ),
             mouse_y_signal * 10.0,
-        )
-        .map(|x| (x * 0.5).clamp(-10.0, 10.0));
+        );
+        let buttons = keyboard
+            .into_iter()
+            .map(|(key, NoteKey { frequency: _, gate })| (key, gate.bool_var()))
+            .chain(
+                drum_machine
+                    .into_iter()
+                    .map(|(ch, (_, var))| (ch, var.bool_var())),
+            )
+            .collect();
         Ok(Self {
             mouse_coord: None,
             signal_player,
             lit_coords: HashMap::new(),
-            signal: keyboard_synth.map(move |s| (s * args.volume_scale) as f32),
+            signal: filtered_synth.map(move |s| (s * args.volume_scale) as f32),
             octave_range: 24,
-            keyboard,
+            buttons,
             mouse_x_var,
             mouse_y_var,
             frame_count: 0,
@@ -169,7 +220,7 @@ struct GuiComponent;
 fn coord_to_rgba32(coord: Coord, size: Size) -> Rgba32 {
     let x = coord.x as u32;
     let y = coord.y as u32;
-    let r = 255_u32.saturating_sub(((x * 255) / size.width()));
+    let r = 255_u32.saturating_sub((x * 255) / size.width());
     let g = (x * 510) / size.width();
     let g = if g > 255 {
         510_u32.saturating_sub(g)
@@ -254,16 +305,16 @@ impl Component for GuiComponent {
                     key: Key::Char(ref ch),
                     event: KeyboardEvent::KeyDown,
                 } => {
-                    if let Some(note) = state.keyboard.get(ch) {
-                        note.gate.set(true);
+                    if let Some(note) = state.buttons.get(ch) {
+                        note.set();
                     }
                 }
                 KeyboardInput {
                     key: Key::Char(ref ch),
                     event: KeyboardEvent::KeyUp,
                 } => {
-                    if let Some(note) = state.keyboard.get(ch) {
-                        note.gate.set(false);
+                    if let Some(note) = state.buttons.get(ch) {
+                        note.clear();
                     }
                 }
                 _ => (),

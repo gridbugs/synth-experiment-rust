@@ -163,9 +163,9 @@ dependencies = [
 
 [[package]]
 name = "chargrid_sdl2"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0ac5642dd8765ab27f8c0df8e7a695911bfc6f98f892ba62391ce9d0f2e76a0"
+checksum = "2bcb0ea657f24822476066aeeb04e58ec7c2b1db97bbff7fbf940d96d17c369b"
 dependencies = [
  "chargrid_input",
  "chargrid_runtime",
@@ -557,6 +557,12 @@ checksum = "6d0d1830bcd151a6fc4aea1369af235b36c1528fe976b8ff678683c9995eade8"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
 name = "meap"
@@ -967,6 +973,7 @@ dependencies = [
  "hound",
  "line_2d",
  "log",
+ "maplit",
  "meap",
  "rgb_int",
  "synth_language",

@@ -52,6 +52,7 @@ pub struct BufferedSignal<T>(Rc<RefCell<BufferedSignalUnshared<T>>>);
 pub type Sf64 = BufferedSignal<f64>;
 pub type Sf32 = BufferedSignal<f32>;
 pub type Sbool = BufferedSignal<bool>;
+pub type Su8 = BufferedSignal<u8>;
 
 impl<T: Clone + 'static> BufferedSignal<T> {
     pub fn new<S: SignalTrait<T> + 'static>(signal: S) -> Self {
@@ -93,6 +94,17 @@ impl<T: Clone + 'static> BufferedSignal<T> {
             forced_signal,
         })
     }
+
+    pub fn debug<F: FnMut(T, &SignalCtx) + 'static>(&self, f: F) -> Self {
+        BufferedSignal::new(Debug {
+            signal: self.clone_ref(),
+            f,
+        })
+    }
+
+    pub fn debug_<F: FnMut() + 'static>(&self, mut f: F) -> Self {
+        self.debug(move |_, _| f())
+    }
 }
 
 impl BufferedSignal<bool> {
@@ -117,8 +129,45 @@ impl Sf64 {
             exp01: Exp01::new(k),
         })
     }
+    pub fn f32(&self) -> Sf32 {
+        self.map(|x| x as f32)
+    }
 }
 
+impl Sf32 {
+    pub fn f64(&self) -> Sf64 {
+        self.map(|x| x as f64)
+    }
+}
+
+impl Su8 {
+    pub fn expand(&self) -> [Sbool; 8] {
+        [
+            self.map(|x| x & (1 << 0) != 0),
+            self.map(|x| x & (1 << 1) != 0),
+            self.map(|x| x & (1 << 2) != 0),
+            self.map(|x| x & (1 << 3) != 0),
+            self.map(|x| x & (1 << 4) != 0),
+            self.map(|x| x & (1 << 5) != 0),
+            self.map(|x| x & (1 << 6) != 0),
+            self.map(|x| x & (1 << 7) != 0),
+        ]
+    }
+}
+
+struct Debug<T: Clone + 'static, F: FnMut(T, &SignalCtx)> {
+    signal: BufferedSignal<T>,
+    f: F,
+}
+impl<T: Clone + 'static, F: FnMut(T, &SignalCtx)> SignalTrait<T> for Debug<T, F> {
+    fn sample(&mut self, ctx: &SignalCtx) -> T {
+        let sample = self.signal.sample(ctx);
+        (self.f)(sample.clone(), ctx);
+        sample
+    }
+}
+
+#[derive(Clone)]
 pub struct Const<T: Clone>(T);
 
 impl<T: Clone + 'static> Const<T> {
@@ -126,8 +175,8 @@ impl<T: Clone + 'static> Const<T> {
         Self(value)
     }
 
-    pub fn into_buffered_signal(self) -> BufferedSignal<T> {
-        BufferedSignal::new(self)
+    pub fn buffered_signal(&self) -> BufferedSignal<T> {
+        BufferedSignal::new(self.clone())
     }
 }
 
@@ -156,14 +205,80 @@ impl<T: Clone + 'static> Var<T> {
         *self.0.borrow_mut().deref_mut() = value;
     }
 
-    pub fn into_buffered_signal(self) -> BufferedSignal<T> {
-        BufferedSignal::new(self)
+    pub fn buffered_signal(&self) -> BufferedSignal<T> {
+        BufferedSignal::new(self.clone_ref())
+    }
+}
+
+impl Var<bool> {
+    pub fn bool_var(&self) -> BoolVar {
+        BoolVar::Var(self.clone_ref())
     }
 }
 
 impl<T: Clone + 'static> SignalTrait<T> for Var<T> {
     fn sample(&mut self, _ctx: &SignalCtx) -> T {
         self.get()
+    }
+}
+
+pub struct TriggerVar {
+    var: Var<bool>,
+}
+
+impl TriggerVar {
+    pub fn new() -> Self {
+        Self {
+            var: Var::new(false),
+        }
+    }
+
+    pub fn clone_ref(&self) -> Self {
+        Self {
+            var: self.var.clone_ref(),
+        }
+    }
+
+    pub fn set(&self) {
+        self.var.set(true);
+    }
+
+    pub fn buffered_signal(&self) -> Sbool {
+        Sbool::new(self.clone_ref())
+    }
+
+    pub fn bool_var(&self) -> BoolVar {
+        BoolVar::TriggerVar(self.clone_ref())
+    }
+}
+
+impl SignalTrait<bool> for TriggerVar {
+    fn sample(&mut self, _: &SignalCtx) -> bool {
+        let value = self.var.get();
+        self.var.set(false);
+        value
+    }
+}
+
+/// Convenience wrapper of `Var<bool>` and `TriggerVar` which supports setting and clearing.
+/// Clearing a `TriggerVar` has no effect as it is cleared automatically.
+pub enum BoolVar {
+    Var(Var<bool>),
+    TriggerVar(TriggerVar),
+}
+
+impl BoolVar {
+    pub fn set(&self) {
+        match self {
+            Self::Var(var) => var.set(true),
+            Self::TriggerVar(trigger_var) => trigger_var.set(),
+        }
+    }
+    pub fn clear(&self) {
+        match self {
+            Self::Var(var) => var.set(false),
+            Self::TriggerVar(_) => (),
+        }
     }
 }
 

@@ -1,19 +1,25 @@
 use crate::{
-    signal::{BufferedSignal, Const, Sbool, Sf64, Var},
+    signal::{BufferedSignal, Const, Sbool, Sf64, Su8, TriggerVar, Var},
     synth_modules::{
         adsr_envelope_lin_01, amplify, asr_envelope_lin_01, biquad_filter, clock, oscillator,
-        random_uniform, sample_and_hold, sum, synth_sequencer, weighted_sum,
+        random_uniform, sample_and_hold, sample_player, sum, synth_sequencer, trigger_sequencer_8,
+        weighted_sum,
     },
     Waveform,
 };
 
 pub fn const_<T: Clone + 'static>(value: T) -> BufferedSignal<T> {
-    Const::new(value).into_buffered_signal()
+    Const::new(value).buffered_signal()
 }
 
 pub fn var<T: Clone + 'static>(value: T) -> (BufferedSignal<T>, Var<T>) {
     let var = Var::new(value);
-    (var.clone_ref().into_buffered_signal(), var)
+    (var.buffered_signal(), var)
+}
+
+pub fn trigger_var() -> (Sbool, TriggerVar) {
+    let var = TriggerVar::new();
+    (var.buffered_signal(), var)
 }
 
 pub fn lfo(
@@ -201,4 +207,14 @@ pub use synth_sequencer::{Output as SynthSequencerOutput, Step as SynthSequencer
 pub fn synth_sequencer(sequence: Vec<SynthSequencerStep>, clock: Sbool) -> SynthSequencerOutput {
     use synth_sequencer::*;
     create(Props { sequence, clock })
+}
+
+pub fn trigger_sequencer_8(sequence: Vec<Su8>, clock: Sbool) -> [Sbool; 8] {
+    use trigger_sequencer_8::*;
+    create(Props { sequence, clock })
+}
+
+pub fn sample_player(data: Vec<f32>, trigger: Sbool) -> Sf64 {
+    use sample_player::*;
+    create(Props { data, trigger }).f64()
 }
