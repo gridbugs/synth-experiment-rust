@@ -42,7 +42,10 @@ pub struct SamplePlayer<T> {
 }
 
 impl<T: SizedSample + Send + 'static> SamplePlayer<T> {
-    pub fn new(downsample: u32) -> anyhow::Result<Self> {
+    pub fn new() -> anyhow::Result<Self> {
+        Self::new_with_downsample(1)
+    }
+    pub fn new_with_downsample(downsample: u32) -> anyhow::Result<Self> {
         assert!(downsample > 0, "downsample must be positive");
         let (sender, receiver) = mpsc::channel::<T>();
         let sink_cursor = Arc::new(RwLock::new(0));

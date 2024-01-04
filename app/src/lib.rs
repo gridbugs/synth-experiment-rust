@@ -27,7 +27,7 @@ fn make_key_synth(frequency_hz: Sf64, gate: Sbool, clock: Sbool) -> Sf64 {
         frequency_hz.clone_ref() * 0.5,
         const_(0.2),
     )]);
-    let release = const_(2.0);
+    let release = const_(0.2);
     let env = butterworth_low_pass_filter(
         adsr_envelope_lin_01(
             gate.clone_ref(),
@@ -181,7 +181,7 @@ impl AppData {
         let keyboard_synth = sum(key_synths);
         let drums = sum(drum_machine.values().map(|(s, _)| s.clone_ref()).collect());
         let manual_synth = sum(vec![keyboard_synth, drums]);
-        let combined_synth = sum(vec![manual_synth, sequencers * 0.2]);
+        let combined_synth = sum(vec![manual_synth, sequencers * 0.0]);
         let filtered_synth = chebyshev_low_pass_filter(
             combined_synth.clone_ref(),
             butterworth_low_pass_filter(
@@ -189,7 +189,8 @@ impl AppData {
                 const_(5.0),
             ),
             mouse_y_signal * 10.0,
-        );
+        )
+        .map(|x| (x * 1.0).clamp(-2.0, 2.0));
         let buttons = keyboard
             .into_iter()
             .map(|(key, NoteKey { frequency: _, gate })| (key, gate.bool_var()))

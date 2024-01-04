@@ -35,9 +35,13 @@ impl<T: Clone> BufferedSignalUnshared<T> {
 
     pub fn sample(&mut self, ctx: &SignalCtx) -> T {
         if ctx.sample_index < self.next_sample_index {
-            self.buffered_sample
-                .clone()
-                .unwrap_or_else(|| self.sample_signal(ctx))
+            if let Some(buffered_sample) = self.buffered_sample.as_ref() {
+                buffered_sample.clone()
+            } else {
+                let sample = self.sample_signal(ctx);
+                self.buffered_sample = Some(sample.clone());
+                sample
+            }
         } else {
             self.next_sample_index = ctx.sample_index + 1;
             let sample = self.sample_signal(ctx);

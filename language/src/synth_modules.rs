@@ -33,7 +33,7 @@ pub mod oscillator {
                     .rem_euclid(1.0);
             }
             let state = *state;
-            let x = match self.props.waveform.sample(ctx) {
+            match self.props.waveform.sample(ctx) {
                 Waveform::Saw => (state * 2.0) - 1.0,
                 Waveform::Square => {
                     if state < self.props.square_wave_pulse_width_01.sample(ctx) {
@@ -44,8 +44,7 @@ pub mod oscillator {
                 }
                 Waveform::Triangle => (((state * 2.0) - 1.0).abs() * 2.0) - 1.0,
                 Waveform::Sine => (state * std::f64::consts::PI * 2.0).sin(),
-            };
-            x
+            }
         }
     }
 
