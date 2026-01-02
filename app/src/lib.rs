@@ -152,7 +152,7 @@ impl AppData {
         let keyboard: BTreeMap<char, NoteKey> = vec![make_notes_even_temp(
             start_frequency,
             &[
-                'a', 'o', '.', 'e', 'p', 'u', 'i', 'f', 'd', 'g', 'h', 'c', 't', 'n', 'l', 's',
+                'a', 's', 'e', 'd', 'r', 'f', 'g', 'y', 'h', 'u', 'j', 'i', 'k', 'l', 'p', ';',
             ],
         )
         .into_iter()]
@@ -169,9 +169,9 @@ impl AppData {
             ));
         }
         let drum_machine = maplit::btreemap! {
-            ';' => sample_var(samples::sn01()),
-            'q' => sample_var(samples::bd01()),
-            'j' => sample_var(samples::ch01()),
+            'z' => sample_var(samples::sn01()),
+            'x' => sample_var(samples::bd01()),
+            'c' => sample_var(samples::ch01()),
         };
         let (mouse_x_signal, mouse_x_var) = var(0.0_f64);
         let (mouse_y_signal, mouse_y_var) = var(0.0_f64);
